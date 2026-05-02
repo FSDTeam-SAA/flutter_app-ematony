@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/config/app_assets.dart';
+import '../auth/auth_controller.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,13 +12,38 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animCtrl;
+  late final Animation<double> _fadeAnim;
+
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) context.go('/onboarding');
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _animCtrl.forward();
+
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      final auth = context.read<AuthController>();
+      if (auth.isAuthenticated && !auth.isKycVerified) {
+        context.go('/kyc');
+      } else if (auth.isAuthenticated) {
+        context.go('/home');
+      } else {
+        context.go('/onboarding');
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -25,58 +52,46 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
+          // ── Top-right African pattern ──
           Positioned(
-            top: -40,
-            right: -40,
-            child: _CornerDecoration(size: 220, alignment: Alignment.topRight),
-          ),
-          Positioned(
-            bottom: -40,
-            left: -40,
-            child: _CornerDecoration(size: 220, alignment: Alignment.bottomLeft),
-          ),
-          Center(
+            top: -10,
+            right: -10,
             child: Image.asset(
-              'assets/ajo-family.png',
-              width: 200,
+              AppAssets.patternTopRight,
+              width: 160,
+              height: 160,
               fit: BoxFit.contain,
             ),
           ),
+          // ── Bottom-left African pattern ──
+          Positioned(
+            bottom: -10,
+            left: -10,
+            child: Image.asset(
+              AppAssets.patternBottomLeft,
+              width: 160,
+              height: 160,
+              fit: BoxFit.contain,
+            ),
+          ),
+          // ── Centred logo ──
+          Center(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    AppAssets.logoFlat,
+                    width: 200,
+                    height: 200,
+                    fit: BoxFit.contain,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _CornerDecoration extends StatelessWidget {
-  const _CornerDecoration({required this.size, required this.alignment});
-
-  final double size;
-  final Alignment alignment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size / 2),
-        gradient: const SweepGradient(
-          colors: [
-            Color(0xFF1A6B5A),
-            Color(0xFFE88C24),
-            Color(0xFF1A6B5A),
-            Color(0xFFE24B4A),
-            Color(0xFF1A6B5A),
-          ],
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withAlpha(180),
-          borderRadius: BorderRadius.circular(size / 2),
-        ),
       ),
     );
   }

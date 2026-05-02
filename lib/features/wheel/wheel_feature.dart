@@ -1,417 +1,423 @@
-import 'dart:math';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../groups/groups_feature.dart';
+import '../../core/widgets/ajo_chrome.dart';
 
-// ─── Wheel Screen ─────────────────────────────────────────────────────────────
-
-class WheelScreen extends StatefulWidget {
+class WheelScreen extends StatelessWidget {
   const WheelScreen({super.key});
 
   @override
-  State<WheelScreen> createState() => _WheelScreenState();
-}
-
-class _WheelScreenState extends State<WheelScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _spinCtrl;
-  late Animation<double> _spinAnim;
-  bool _isSpinning = false;
-  int? _winnerIndex;
-  String? _selectedGroupId;
-
-  @override
-  void initState() {
-    super.initState();
-    _spinCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 3));
-    _spinAnim = CurvedAnimation(parent: _spinCtrl, curve: Curves.easeOut);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GroupsController>().load();
-    });
-  }
-
-  @override
-  void dispose() {
-    _spinCtrl.dispose();
-    super.dispose();
-  }
-
-  void _spin() {
-    if (_isSpinning) return;
-    final ctrl = context.read<GroupsController>();
-    final members = ctrl.detail?.members ?? [];
-    if (members.isEmpty) return;
-
-    setState(() {
-      _isSpinning = true;
-      _winnerIndex = null;
-    });
-
-    _spinCtrl.reset();
-    _spinCtrl.forward().then((_) {
-      final winner = Random().nextInt(members.length);
-      setState(() {
-        _isSpinning = false;
-        _winnerIndex = winner;
-      });
-
-      if (mounted) {
-        _showWinnerDialog(context, members[winner].name);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final ctrl = context.watch<GroupsController>();
-    final groups = ctrl.groups;
-    final detail = ctrl.detail;
-    final members = detail?.members ?? [];
-    final naira = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
+    const members = [
+      'John',
+      'David',
+      'Mary',
+      'Grace',
+      'Grace',
+      'Grace',
+      'Paul',
+      'Paul',
+    ];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: const Text('Wheel'),
-      ),
-      body: RefreshIndicator(
-        onRefresh: ctrl.load,
-        color: AppColors.primary,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // ── Group Selector ──
-            Text(
-              'Select Group',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedGroupId,
-                  isExpanded: true,
-                  hint: const Text('Choose a group'),
-                  items: groups.map((g) {
-                    return DropdownMenuItem(
-                      value: g.id,
-                      child: Text(g.name),
-                    );
-                  }).toList(),
-                  onChanged: (id) {
-                    setState(() => _selectedGroupId = id);
-                    if (id != null) ctrl.loadDetail(id);
-                  },
-                ),
-              ),
-            ),
-
-            if (detail != null) ...[
-              const SizedBox(height: 16),
-
-              // ── Savings Pool Card ──
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primaryDark, AppColors.primary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Current Savings Pool',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      naira.format(detail.contributionAmount),
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return AjoScaffold(
+      currentIndex: -1,
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 110),
+          child: Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AjoPatternHeader(
+                    height: 298,
+                    bottomRadius: 28,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _PoolStat(
-                          label: 'Next Wheel',
-                          value: detail.nextWheelDate.isNotEmpty ? detail.nextWheelDate : 'April-27',
+                        const SizedBox(height: 28),
+                        Text(
+                          'Select Group',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
                         ),
-                        Container(width: 1, height: 36, color: Colors.white24),
-                        _PoolStat(
-                          label: 'Members',
-                          value: members.length.toString().padLeft(2, '0'),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.white.withAlpha(80)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white),
+                                ),
+                                child: const Icon(
+                                  Icons.blur_circular_outlined,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Friends With Benefits - 2026',
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: -56,
+                    child: AjoCard(
+                      color: AppColors.primaryDark,
+                      radius: 22,
+                      borderColor: const Color(0xFF8DA398),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(18),
+                          blurRadius: 14,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                      child: Column(
+                        children: [
+                          Text(
+                            'Current Savings Pool',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '\u20A61000.00',
+                            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: const [
+                              Expanded(
+                                child: _PoolMeta(label: 'Next Wheel', value: 'April -27'),
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: _PoolMeta(label: 'Members', value: '08'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 24),
-
-              // ── Wheel ──
-              Center(
+              const SizedBox(height: 88),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
                     Text(
                       'Next payout (23/03)',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.mutedText,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                     ),
+                    const SizedBox(height: 4),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      color: AppColors.primaryDark,
+                    ),
                     const SizedBox(height: 8),
-                    AnimatedBuilder(
-                      animation: _spinAnim,
-                      builder: (context, child) {
-                        return Transform.rotate(
-                          angle: _spinAnim.value * 6 * pi,
-                          child: child,
-                        );
-                      },
-                      child: _WheelWidget(
-                        members: members,
-                        winnerIndex: _winnerIndex,
-                        onSpin: _spin,
+                    GestureDetector(
+                      onTap: () => context.push('/wheel/winner?name=Ematony&amount=%E2%82%A612000'),
+                      child: _WheelDisc(names: members),
+                    ),
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'All Members',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...List.generate(
+                      members.length,
+                      (index) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _WheelMemberRow(
+                          index: index + 1,
+                          name: members[index],
+                          winner: index == 0,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              // ── Members List ──
-              Text(
-                'All Members',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              ...members.asMap().entries.map(
-                    (entry) => _MemberRow(
-                      index: entry.key,
-                      member: entry.value,
-                      isWinner: _winnerIndex == entry.key,
-                    ),
-                  ),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showWinnerDialog(BuildContext context, String name) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.emoji_events, color: AppColors.warning, size: 56),
-            const SizedBox(height: 16),
-            Text(
-              'Congratulations!',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'is the winner this round!',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.mutedText),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Great!'),
-            ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ─── Wheel Widget ─────────────────────────────────────────────────────────────
+class WinnerCongratulationsScreen extends StatelessWidget {
+  const WinnerCongratulationsScreen({
+    super.key,
+    required this.winnerName,
+    required this.amount,
+  });
 
-class _WheelWidget extends StatelessWidget {
-  const _WheelWidget({required this.members, this.winnerIndex, required this.onSpin});
-
-  final List<GroupMember> members;
-  final int? winnerIndex;
-  final VoidCallback onSpin;
+  final String winnerName;
+  final String amount;
 
   @override
   Widget build(BuildContext context) {
-    const size = 280.0;
-    final count = members.length.clamp(1, 12);
-    final colors = [
-      AppColors.primary,
-      AppColors.success,
-      AppColors.warning,
-      AppColors.danger,
-      Colors.purple,
-      Colors.blue,
-    ];
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Outer ring
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border, width: 8),
-              color: AppColors.background,
-            ),
-          ),
-          // Member avatars arranged in a circle
-          ...List.generate(count, (i) {
-            final angle = (2 * pi * i / count) - (pi / 2);
-            const radius = 100.0;
-            final x = radius * cos(angle);
-            final y = radius * sin(angle);
-            final isWinner = winnerIndex == i;
-            return Positioned(
-              left: size / 2 + x - 24,
-              top: size / 2 + y - 24,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: colors[i % colors.length],
-                  border: Border.all(
-                    color: isWinner ? AppColors.warning : Colors.white,
-                    width: isWinner ? 3 : 2,
-                  ),
-                  boxShadow: isWinner
-                      ? [const BoxShadow(color: AppColors.warning, blurRadius: 8)]
-                      : null,
-                ),
-                child: Center(
-                  child: Text(
-                    members[i].name.isNotEmpty ? members[i].name[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-          // Center spin button
-          GestureDetector(
-            onTap: onSpin,
+    return Scaffold(
+      backgroundColor: AppColors.primaryDark,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 42),
             child: Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(28, 34, 28, 34),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
               ),
-              alignment: Alignment.center,
-              child: Text(
-                'Spin',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AjoAvatar(name: winnerName, radius: 42),
+                      Positioned(
+                        right: -2,
+                        bottom: 4,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF2F7F57),
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Congratulations',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: const Color(0xFFFF7A1A),
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    winnerName,
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    width: 180,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark,
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      amount,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'You receive $amount\nthis month.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                  const SizedBox(height: 26),
+                  TextButton(
+                    onPressed: () => context.go('/groups'),
+                    child: const Text('Back to Groups'),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ─── Sub-Widgets ──────────────────────────────────────────────────────────────
-
-class _PoolStat extends StatelessWidget {
-  const _PoolStat({required this.label, required this.value});
+class _PoolMeta extends StatelessWidget {
+  const _PoolMeta({
+    required this.label,
+    required this.value,
+  });
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white70),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Colors.white,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _MemberRow extends StatelessWidget {
-  const _MemberRow({
+class _WheelDisc extends StatelessWidget {
+  const _WheelDisc({
+    required this.names,
+  });
+
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 330,
+      height: 330,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 330,
+            height: 330,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF4AF21), width: 2),
+              gradient: const RadialGradient(
+                colors: [Color(0xFF0D5544), AppColors.primaryDark],
+              ),
+            ),
+          ),
+          for (var i = 0; i < names.length; i++)
+            Positioned(
+              left: 165 + 120 * math.cos((2 * math.pi * i / names.length) - math.pi / 2) - 28,
+              top: 165 + 120 * math.sin((2 * math.pi * i / names.length) - math.pi / 2) - 28,
+              child: AjoAvatar(name: names[i], radius: 28),
+            ),
+          Container(
+            width: 126,
+            height: 126,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primaryDark,
+              border: Border.all(color: const Color(0xFFF4AF21), width: 2),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              'Spin',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WheelMemberRow extends StatelessWidget {
+  const _WheelMemberRow({
     required this.index,
-    required this.member,
-    required this.isWinner,
+    required this.name,
+    required this.winner,
   });
 
   final int index;
-  final GroupMember member;
-  final bool isWinner;
+  final String name;
+  final bool winner;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isWinner ? AppColors.subtle : Colors.white,
+        color: winner ? const Color(0xFF1F6F5D) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isWinner ? AppColors.primary : AppColors.border,
-        ),
+        border: Border.all(color: const Color(0xFFF4AF21)),
       ),
       child: Row(
         children: [
@@ -419,66 +425,47 @@ class _MemberRow extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: isWinner ? AppColors.primary : AppColors.background,
               shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF4AF21)),
             ),
             alignment: Alignment.center,
             child: Text(
-              '${index + 1}',
+              '$index',
               style: TextStyle(
-                color: isWinner ? Colors.white : AppColors.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.subtle,
-            child: Text(
-              member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: AppColors.primary,
+                color: winner ? Colors.white : AppColors.primaryDark,
                 fontWeight: FontWeight.w600,
-                fontSize: 12,
               ),
             ),
           ),
           const SizedBox(width: 10),
+          AjoAvatar(name: name, radius: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              member.name,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: isWinner ? FontWeight.w700 : FontWeight.w500,
+              name,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontSize: 15,
+                    color: winner ? Colors.white : AppColors.text,
+                    fontWeight: FontWeight.w500,
                   ),
             ),
           ),
-          if (isWinner) ...[
-            const Icon(Icons.emoji_events, color: AppColors.warning, size: 18),
-            const SizedBox(width: 4),
-            Text(
-              'Last Winner',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.warning,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ] else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.warningLight,
-                borderRadius: BorderRadius.circular(6),
+          Row(
+            children: [
+              Icon(
+                winner ? Icons.workspace_premium_outlined : Icons.timelapse_outlined,
+                color: const Color(0xFFF4AF21),
+                size: 18,
               ),
-              child: Text(
-                'Pending',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.warning,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 4),
+              Text(
+                winner ? 'Last Winner' : 'Pending',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: winner ? const Color(0xFFF6F6D5) : const Color(0xFFF4AF21),
                     ),
               ),
-            ),
+            ],
+          ),
         ],
       ),
     );

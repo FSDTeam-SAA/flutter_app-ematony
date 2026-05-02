@@ -39,6 +39,11 @@ class SessionStorage {
     return jsonDecode(raw) as Map<String, dynamic>;
   }
 
+  Future<void> saveUser(Map<String, dynamic> user) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(user));
+  }
+
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_accessTokenKey);

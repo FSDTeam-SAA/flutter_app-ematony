@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/mock/app_mock_data.dart';
+import '../../core/models/group_model.dart';
+import '../../core/models/payment_model.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/widgets/member_shell.dart';
+import '../../core/widgets/ajo_chrome.dart';
 import '../auth/auth_controller.dart';
 
 // ─── Repository ───────────────────────────────────────────────────────────────
@@ -15,127 +17,71 @@ class HomeRepository {
 
   final ApiClient _apiClient;
 
-  Future<HomeDashboard> fetchDashboard() async {
-    final response = await _apiClient.dio.get<Map<String, dynamic>>('/dashboard/home');
-    final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-    return HomeDashboard.fromJson(data);
+  Future<List<GroupModel>> fetchMyGroups() async {
+    try {
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/groups');
+      final raw = response.data?['data'];
+      if (raw is List) {
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(GroupModel.fromJson)
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return AppMockData.activeGroups().map(GroupModel.fromJson).toList();
+    }
   }
-}
 
-// ─── Models ───────────────────────────────────────────────────────────────────
-
-class HomeDashboard {
-  const HomeDashboard({
-    required this.balance,
-    required this.upcomingPaymentName,
-    required this.upcomingPaymentAmount,
-    required this.activeGroups,
-    required this.pendingRequests,
-    required this.recentTransactions,
-    required this.recentNotifications,
-  });
-
-  final double balance;
-  final String upcomingPaymentName;
-  final double upcomingPaymentAmount;
-  final int activeGroups;
-  final int pendingRequests;
-  final List<ActivityTransaction> recentTransactions;
-  final List<ActivityNotification> recentNotifications;
-
-  factory HomeDashboard.fromJson(Map<String, dynamic> json) {
-    final wallet = json['walletSummary'] as Map<String, dynamic>? ?? {};
-    final upcoming = json['upcomingPayment'] as Map<String, dynamic>? ?? {};
-    return HomeDashboard(
-      balance: (wallet['balance'] ?? wallet['totalCompleted'] ?? 0).toDouble(),
-      upcomingPaymentName: (upcoming['groupName'] ?? '').toString(),
-      upcomingPaymentAmount: (upcoming['amount'] ?? 0).toDouble(),
-      activeGroups: (json['activeGroups'] ?? 0) as int,
-      pendingRequests: (json['pendingRequests'] ?? 0) as int,
-      recentTransactions: ((json['recentTransactions'] as List<dynamic>?) ?? [])
-          .map((e) => ActivityTransaction.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      recentNotifications: ((json['recentNotifications'] as List<dynamic>?) ?? [])
-          .map((e) => ActivityNotification.fromJson(e as Map<String, dynamic>))
-          .toList(),
-    );
-  }
-}
-
-class ActivityTransaction {
-  const ActivityTransaction({
-    required this.id,
-    required this.amount,
-    required this.status,
-    required this.type,
-    required this.createdAt,
-  });
-
-  final String id;
-  final double amount;
-  final String status;
-  final String type;
-  final DateTime createdAt;
-
-  bool get isTopUp => type.toLowerCase().contains('top') || type.toLowerCase().contains('deposit');
-
-  factory ActivityTransaction.fromJson(Map<String, dynamic> json) {
-    return ActivityTransaction(
-      id: (json['_id'] ?? '').toString(),
-      amount: (json['price'] ?? json['amount'] ?? 0).toDouble(),
-      status: (json['paymentStatus'] ?? 'pending').toString(),
-      type: (json['type'] ?? 'payment').toString(),
-      createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ?? DateTime.now(),
-    );
-  }
-}
-
-class ActivityNotification {
-  const ActivityNotification({
-    required this.id,
-    required this.title,
-    required this.content,
-    required this.isTopUp,
-    required this.createdAt,
-  });
-
-  final String id;
-  final String title;
-  final String content;
-  final bool isTopUp;
-  final DateTime createdAt;
-
-  factory ActivityNotification.fromJson(Map<String, dynamic> json) {
-    final title = (json['title'] ?? 'Notification').toString();
-    return ActivityNotification(
-      id: (json['_id'] ?? '').toString(),
-      title: title,
-      content: (json['content'] ?? '').toString(),
-      isTopUp: title.toLowerCase().contains('top') || title.toLowerCase().contains('add'),
-      createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ?? DateTime.now(),
-    );
+  Future<List<PaymentModel>> fetchRecentTransactions() async {
+    try {
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/payment/me');
+      final raw = response.data?['data'];
+      if (raw is List) {
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(PaymentModel.fromJson)
+            .take(6)
+            .toList();
+      }
+      return [];
+    } catch (_) {
+      return AppMockData.transactions()
+          .map(PaymentModel.fromJson)
+          .take(6)
+          .toList();
+    }
   }
 }
 
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 class HomeController extends ChangeNotifier {
-  HomeController({required HomeRepository repository}) : _repo = repository;
+  HomeController({required HomeRepository repository})
+      : _repository = repository;
 
-  final HomeRepository _repo;
+  final HomeRepository _repository;
 
-  HomeDashboard? dashboard;
   bool isLoading = false;
-  String? errorMessage;
+  List<GroupModel> groups = [];
+  List<PaymentModel> recentTransactions = [];
+  String? error;
 
   Future<void> load() async {
     isLoading = true;
-    errorMessage = null;
+    error = null;
     notifyListeners();
     try {
-      dashboard = await _repo.fetchDashboard();
+      final results = await Future.wait([
+        _repository.fetchMyGroups(),
+        _repository.fetchRecentTransactions(),
+      ]);
+      groups = results[0] as List<GroupModel>;
+      recentTransactions = results[1] as List<PaymentModel>;
     } catch (e) {
-      errorMessage = e.toString();
+      error = e.toString();
     } finally {
       isLoading = false;
       notifyListeners();
@@ -143,7 +89,7 @@ class HomeController extends ChangeNotifier {
   }
 }
 
-// ─── Home Screen ──────────────────────────────────────────────────────────────
+// ─── HomeScreen ───────────────────────────────────────────────────────────────
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -153,6 +99,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _autoPay = true;
+
   @override
   void initState() {
     super.initState();
@@ -163,394 +111,442 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = context.watch<HomeController>();
     final user = context.watch<AuthController>().currentUser;
-    final naira = NumberFormat.currency(symbol: '₦', decimalDigits: 2);
+    final homeCtrl = context.watch<HomeController>();
+    final userName = user?.name.isNotEmpty == true ? user!.name : 'Ematony';
 
-    return MemberShell(
+    final firstGroup =
+        homeCtrl.groups.isNotEmpty ? homeCtrl.groups.first : null;
+
+    return AjoScaffold(
       currentIndex: 0,
-      title: '',
-      child: RefreshIndicator(
-        onRefresh: ctrl.load,
-        color: AppColors.primary,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            // ── Header ──
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppColors.subtle,
-                    backgroundImage: null,
-                    child: Text(
-                      (user?.name.isNotEmpty == true ? user!.name[0] : 'U').toUpperCase(),
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: () => context.read<HomeController>().load(),
+          color: AppColors.primary,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 110),
+            child: Column(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    AjoPatternHeader(
+                      height: 298,
+                      bottomRadius: 28,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              AjoAvatar(name: userName, radius: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Rise and shine!',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: const Color(0xFFFCD68D),
+                                            fontWeight: FontWeight.w400,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      userName,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => context.push('/notifications'),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(0xFFFDF5E9),
+                                      ),
+                                      child: const Icon(
+                                        Icons.notifications_none_rounded,
+                                        color: AppColors.text,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: -1,
+                                      top: -1,
+                                      child: Container(
+                                        width: 18,
+                                        height: 18,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE53935),
+                                          borderRadius:
+                                              BorderRadius.circular(9),
+                                          border: Border.all(
+                                              color: Colors.white, width: 2),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: const Text(
+                                          '2',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          Center(
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Your Balance',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(color: Colors.white),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '₦34,671.80',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .displaySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFFFDF6EC),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Transactions',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.mutedText,
-                              ),
-                        ),
-                        Text(
-                          user?.name ?? 'Ematony',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.text,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => context.push('/notifications'),
-                    icon: Stack(
-                      children: [
-                        const Icon(Icons.notifications_outlined, size: 26),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: AppColors.danger,
-                              shape: BoxShape.circle,
-                            ),
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: -84,
+                      child: AjoCard(
+                        color: const Color(0xFFF9F1DF),
+                        borderColor: const Color(0xFFF0E1BE),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(18),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            // ── Balance Card ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Your Balance',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.mutedText,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      ctrl.dashboard != null
-                          ? naira.format(ctrl.dashboard!.balance)
-                          : '₦0.00',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.text,
-                          ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (ctrl.dashboard?.upcomingPaymentName.isNotEmpty == true) ...[
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Row(
+                        ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Upcoming Payment',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: AppColors.mutedText,
-                                        ),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Upcoming Payment',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        firstGroup?.name ??
+                                            'Friends With Benefits - 2026',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w600),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    ctrl.dashboard!.upcomingPaymentName,
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                ),
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryDark,
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    naira.format(ctrl.dashboard!.upcomingPaymentAmount),
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.text,
-                                        ),
+                                  child: const Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    color: Colors.white,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 20),
+                            Text(
+                              firstGroup?.formattedAmount ?? '₦1000.00',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .displaySmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 10),
                             Row(
                               children: [
-                                _AutoPayToggle(),
-                                const SizedBox(width: 12),
-                                FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 10,
+                                Text(
+                                  'Auto Payment :',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.copyWith(fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(width: 10),
+                                _MiniSwitch(
+                                  value: _autoPay,
+                                  onChanged: (v) =>
+                                      setState(() => _autoPay = v),
+                                ),
+                                const Spacer(),
+                                SizedBox(
+                                  height: 46,
+                                  child: FilledButton(
+                                    onPressed: () => firstGroup != null
+                                        ? context.push(
+                                            '/groups/${firstGroup.id}')
+                                        : context.go('/wallet'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.primaryDark,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                      ),
                                     ),
-                                    minimumSize: Size.zero,
+                                    child: const Text('Pay Now'),
                                   ),
-                                  onPressed: () {},
-                                  child: const Text('Pay Now'),
                                 ),
                               ],
                             ),
                           ],
                         ),
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 110),
+                // ── Your Active Groups ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Your Active Groups',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => context.go('/groups'),
+                        child: const Text('View all'),
+                      ),
                     ],
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── Active Groups ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Your Active Groups',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  TextButton(
-                    onPressed: () => context.go('/groups'),
-                    child: const Text('View all'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            if (ctrl.isLoading && ctrl.dashboard == null)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (ctrl.dashboard != null && ctrl.dashboard!.recentTransactions.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _EmptyCard(message: 'No active groups yet. Create or join one!'),
-              )
-            else
-              SizedBox(
-                height: 130,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: ctrl.dashboard?.activeGroups ?? 0,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) => _GroupCard(
-                    name: 'Group ${i + 1}',
-                    progress: (i + 1) / 3,
-                    rotation: '${i + 1} of 3',
                   ),
                 ),
-              ),
-
-            const SizedBox(height: 24),
-
-            // ── Quick Actions ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Quick Action',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  _QuickActionBtn(
-                    icon: Icons.arrow_upward_rounded,
-                    label: 'Tap Up',
-                    onTap: () => context.push('/wallet'),
-                    tint: AppColors.subtle,
-                    iconColor: AppColors.primary,
-                  ),
-                  const SizedBox(width: 16),
-                  _QuickActionBtn(
-                    icon: Icons.arrow_downward_rounded,
-                    label: 'Withdraw',
-                    onTap: () => context.push('/wallet'),
-                    tint: AppColors.dangerLight,
-                    iconColor: AppColors.danger,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Recent Transactions ──
-            if (ctrl.dashboard != null &&
-                ctrl.dashboard!.recentTransactions.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Recent Transactions',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
+                if (homeCtrl.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  )
+                else if (homeCtrl.groups.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: AjoCard(
+                      radius: 22,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'No active groups yet. Create or join one!',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(color: AppColors.mutedText),
                           ),
+                        ),
+                      ),
                     ),
-                    TextButton(
-                      onPressed: () => context.push('/wallet'),
-                      child: const Text('View Balance'),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: GestureDetector(
+                      onTap: () => context
+                          .push('/groups/${homeCtrl.groups.first.id}'),
+                      child: _ActiveGroupCard(
+                          group: homeCtrl.groups.first,
+                          userName: userName),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              ...ctrl.dashboard!.recentTransactions.take(5).map(
-                    (t) => _TransactionItem(transaction: t, formatter: naira),
                   ),
-              const SizedBox(height: 8),
-            ],
-
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Sub-Widgets ──────────────────────────────────────────────────────────────
-
-class _AutoPayToggle extends StatefulWidget {
-  @override
-  State<_AutoPayToggle> createState() => _AutoPayToggleState();
-}
-
-class _AutoPayToggleState extends State<_AutoPayToggle> {
-  bool _enabled = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          'Auto\nPayment',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.mutedText,
-                height: 1.3,
-              ),
-          textAlign: TextAlign.center,
-        ),
-        Transform.scale(
-          scale: 0.75,
-          child: Switch(
-            value: _enabled,
-            onChanged: (v) => setState(() => _enabled = v),
-            activeThumbColor: AppColors.primary,
-            activeTrackColor: AppColors.subtle,
+                const SizedBox(height: 26),
+                // ── Quick Action ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Quick Action',
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _QuickActionCard(
+                          icon: Icons.north_east_rounded,
+                          iconTint: AppColors.primary,
+                          iconBg: AppColors.subtle,
+                          label: 'Top Up',
+                          onTap: () => context.go('/wallet'),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _QuickActionCard(
+                          icon: Icons.north_rounded,
+                          rotateQuarterTurns: 2,
+                          iconTint: AppColors.danger,
+                          iconBg: AppColors.dangerLight,
+                          label: 'Withdraw',
+                          onTap: () => context.go('/wallet'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-class _GroupCard extends StatelessWidget {
-  const _GroupCard({
-    required this.name,
-    required this.progress,
-    required this.rotation,
-  });
+// ─── Private Widgets ──────────────────────────────────────────────────────────
 
-  final String name;
-  final double progress;
-  final String rotation;
+class _ActiveGroupCard extends StatelessWidget {
+  const _ActiveGroupCard({required this.group, required this.userName});
+
+  final GroupModel group;
+  final String userName;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 200,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+    return AjoCard(
+      radius: 22,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            name,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  group.name,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${(group.completionPercent * 100).toInt()}%',
+                    style: Theme.of(context)
+                        .textTheme
+                        .displaySmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    'Completed',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
-            'Rotation - $rotation',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.mutedText,
-                ),
+            'Rotation : ${group.membersCount} of ${group.maxMembers}',
+            style: Theme.of(context)
+                .textTheme
+                .bodyLarge
+                ?.copyWith(color: AppColors.mutedText),
           ),
-          const Spacer(),
+          const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.border,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-              minHeight: 6,
+              value: group.completionPercent,
+              minHeight: 7,
+              backgroundColor: const Color(0xFFF5EBD7),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            '${(progress * 100).toInt()}% Completed',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w500,
-                ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _MiniMemberCluster(names: [userName, 'Mary', 'David']),
+              const Spacer(),
+              Text(
+                'Upcoming Wheel : Apr 27',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.mutedText),
+              ),
+            ],
           ),
         ],
       ),
@@ -558,110 +554,51 @@ class _GroupCard extends StatelessWidget {
   }
 }
 
-class _QuickActionBtn extends StatelessWidget {
-  const _QuickActionBtn({
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
     required this.icon,
+    required this.iconTint,
+    required this.iconBg,
     required this.label,
     required this.onTap,
-    required this.tint,
-    required this.iconColor,
+    this.rotateQuarterTurns = 0,
   });
 
   final IconData icon;
+  final Color iconTint;
+  final Color iconBg;
   final String label;
   final VoidCallback onTap;
-  final Color tint;
-  final Color iconColor;
+  final int rotateQuarterTurns;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: tint,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: iconColor, size: 24),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: iconColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TransactionItem extends StatelessWidget {
-  const _TransactionItem({required this.transaction, required this.formatter});
-
-  final ActivityTransaction transaction;
-  final NumberFormat formatter;
-
-  @override
-  Widget build(BuildContext context) {
-    final isTopUp = transaction.isTopUp;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: AjoCard(
+        radius: 22,
+        padding: const EdgeInsets.symmetric(vertical: 22),
+        child: Column(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: isTopUp ? AppColors.subtle : AppColors.dangerLight,
-                shape: BoxShape.circle,
+                color: iconBg,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                isTopUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                color: isTopUp ? AppColors.primary : AppColors.danger,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isTopUp ? 'Tap Up' : 'Withdraw',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  Text(
-                    DateFormat('dd MMM yyyy').format(transaction.createdAt),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.mutedText,
-                        ),
-                  ),
-                ],
+              child: RotatedBox(
+                quarterTurns: rotateQuarterTurns,
+                child: Icon(icon, color: iconTint, size: 28),
               ),
             ),
+            const SizedBox(height: 14),
             Text(
-              formatter.format(transaction.amount),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: isTopUp ? AppColors.primary : AppColors.danger,
-                  ),
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -670,23 +607,68 @@ class _TransactionItem extends StatelessWidget {
   }
 }
 
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.message});
-  final String message;
+class _MiniSwitch extends StatelessWidget {
+  const _MiniSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 54,
+        height: 32,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: value ? AppColors.primary : const Color(0xFFD8DDD4),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color(0xFFF9F1DF),
+          ),
+        ),
       ),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.mutedText),
-        textAlign: TextAlign.center,
+    );
+  }
+}
+
+class _MiniMemberCluster extends StatelessWidget {
+  const _MiniMemberCluster({required this.names});
+
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 82,
+      height: 28,
+      child: Stack(
+        children: [
+          for (var i = 0; i < names.length; i++)
+            Positioned(
+              left: i * 18.0,
+              child: AjoAvatar(name: names[i], radius: 14),
+            ),
+          Positioned(
+            left: names.length * 18.0,
+            top: 4,
+            child: Text(
+              '+9',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }

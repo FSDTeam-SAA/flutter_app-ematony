@@ -14,6 +14,7 @@ class AuthController extends ChangeNotifier {
   String? errorMessage;
 
   bool get isAuthenticated => currentUser != null;
+  bool get isKycVerified => currentUser?.kycVerified ?? false;
 
   Future<void> bootstrap() async {
     currentUser = await _repository.restoreUser();
@@ -74,6 +75,26 @@ class AuthController extends ChangeNotifier {
     await _repository.logout();
     currentUser = null;
     isBusy = false;
+    notifyListeners();
+  }
+
+  Future<void> updateProfile(AppUser updated) async {
+    currentUser = updated;
+    await _repository.updateUser(updated);
+    notifyListeners();
+  }
+
+  Future<void> markKycVerified() async {
+    if (currentUser == null) return;
+    currentUser = AppUser(
+      id: currentUser!.id,
+      name: currentUser!.name,
+      email: currentUser!.email,
+      role: currentUser!.role,
+      phone: currentUser!.phone,
+      kycVerified: true,
+    );
+    await _repository.updateUser(currentUser!);
     notifyListeners();
   }
 

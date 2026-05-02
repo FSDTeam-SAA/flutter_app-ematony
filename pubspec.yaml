@@ -33,11 +33,14 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   dio: ^5.9.0
+  pretty_dio_logger: ^1.4.0
   go_router: ^16.2.0
   google_fonts: ^6.3.2
   intl: ^0.20.2
   provider: ^6.1.5
   shared_preferences: ^2.5.3
+  url_launcher: ^6.3.1
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
@@ -57,4 +60,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/ajo-family.png
+    - assets/image 89.png
+    - assets/Group 96.png
+    - assets/Ellipse 76.png
+    - assets/Ellipse 75.png
+    - assets/Copilot_20260421_100358 1.png
+    - assets/Copilot_20260421_100358 2.png
+    - assets/Copilot_20260421_100358 2 (1).png
+    - assets/Frame 2147229725.png
+    - assets/7265d9c07c10e2d65c24ebf944a4d23f6d725d71.png

@@ -8,6 +8,8 @@ import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/groups/groups_feature.dart';
 import '../features/home/home_feature.dart';
+import '../features/notifications/notifications_screen.dart';
+import '../features/profile/profile_screen.dart';
 import '../features/wallet/wallet_feature.dart';
 import 'router.dart';
 
@@ -18,10 +20,14 @@ class EmatonyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // ── Core ──
         Provider(create: (_) => SessionStorage()),
         Provider(
-          create: (ctx) => ApiClient(sessionStorage: ctx.read<SessionStorage>()),
+          create: (ctx) =>
+              ApiClient(sessionStorage: ctx.read<SessionStorage>()),
         ),
+
+        // ── Auth ──
         Provider(
           create: (ctx) => AuthRepository(
             apiClient: ctx.read<ApiClient>(),
@@ -33,30 +39,62 @@ class EmatonyApp extends StatelessWidget {
             repository: ctx.read<AuthRepository>(),
           )..bootstrap(),
         ),
+
+        // ── Home ──
         Provider(
-          create: (ctx) => HomeRepository(apiClient: ctx.read<ApiClient>()),
+          create: (ctx) =>
+              HomeRepository(apiClient: ctx.read<ApiClient>()),
         ),
         ChangeNotifierProvider(
-          create: (ctx) => HomeController(repository: ctx.read<HomeRepository>()),
+          create: (ctx) =>
+              HomeController(repository: ctx.read<HomeRepository>()),
         ),
+
+        // ── Groups ──
         Provider(
-          create: (ctx) => GroupsRepository(apiClient: ctx.read<ApiClient>()),
+          create: (ctx) =>
+              GroupsRepository(apiClient: ctx.read<ApiClient>()),
         ),
         ChangeNotifierProvider(
-          create: (ctx) => GroupsController(repository: ctx.read<GroupsRepository>()),
+          create: (ctx) =>
+              GroupsController(repository: ctx.read<GroupsRepository>()),
         ),
+
+        // ── Wallet ──
         Provider(
-          create: (ctx) => WalletRepository(apiClient: ctx.read<ApiClient>()),
+          create: (ctx) =>
+              WalletRepository(apiClient: ctx.read<ApiClient>()),
         ),
         ChangeNotifierProvider(
-          create: (ctx) => WalletController(repository: ctx.read<WalletRepository>()),
+          create: (ctx) =>
+              WalletController(repository: ctx.read<WalletRepository>()),
+        ),
+
+        // ── Profile ──
+        Provider(
+          create: (ctx) =>
+              ProfileRepository(apiClient: ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider(
+          create: (ctx) =>
+              ProfileController(repository: ctx.read<ProfileRepository>()),
+        ),
+
+        // ── Notifications ──
+        Provider(
+          create: (ctx) =>
+              NotificationsRepository(apiClient: ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider(
+          create: (ctx) => NotificationsController(
+              repository: ctx.read<NotificationsRepository>()),
         ),
       ],
       child: Builder(
         builder: (ctx) {
           final authController = ctx.watch<AuthController>();
           return MaterialApp.router(
-            title: 'Ematony',
+            title: 'Ajo Family',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             routerConfig: AppRouter.create(authController),

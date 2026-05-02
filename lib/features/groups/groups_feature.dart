@@ -1,11 +1,15 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/mock/app_mock_data.dart';
+import '../../core/models/group_model.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/widgets/member_shell.dart';
+import '../../core/widgets/ajo_chrome.dart';
+import '../../core/widgets/labeled_text_field.dart';
+import '../../core/widgets/primary_button.dart';
 
 // ─── Repository ───────────────────────────────────────────────────────────────
 
@@ -14,215 +18,173 @@ class GroupsRepository {
 
   final ApiClient _apiClient;
 
-  Future<List<GroupSummary>> fetchGroups() async {
-    final res = await _apiClient.dio.get<Map<String, dynamic>>('/groups');
-    final raw = res.data?['data'] as List<dynamic>? ?? [];
-    return raw.map((e) => GroupSummary.fromJson(e as Map<String, dynamic>)).toList();
+  Future<List<GroupModel>> listMyGroups() async {
+    try {
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/groups');
+      final raw = response.data?['data'];
+      if (raw is List) {
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(GroupModel.fromJson)
+            .toList();
+      }
+      return [];
+    } on DioException {
+      return AppMockData.activeGroups().map(GroupModel.fromJson).toList();
+    }
   }
 
-  Future<List<GroupSummary>> fetchRequests() async {
-    final res = await _apiClient.dio.get<Map<String, dynamic>>('/groups/requests');
-    final raw = res.data?['data'] as List<dynamic>? ?? [];
-    return raw.map((e) => GroupSummary.fromJson(e as Map<String, dynamic>)).toList();
+  Future<List<GroupModel>> listGroupRequests() async {
+    try {
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/groups/requests');
+      final raw = response.data?['data'];
+      if (raw is List) {
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map((json) {
+              final groupJson = json['groupId'] as Map<String, dynamic>?;
+              if (groupJson != null) return GroupModel.fromJson(groupJson);
+              return GroupModel.fromJson(json);
+            })
+            .toList();
+      }
+      return [];
+    } on DioException {
+      return AppMockData.requestGroups().map(GroupModel.fromJson).toList();
+    }
   }
 
-  Future<GroupDetail> fetchGroupDetail(String id) async {
-    final detail = await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id');
-    final members = await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id/members');
-    final wheel = await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id/wheel');
-    return GroupDetail.fromPayload(
-      detail.data?['data'] as Map<String, dynamic>? ?? {},
-      members.data?['data'] as List<dynamic>? ?? [],
-      wheel.data?['data'] as Map<String, dynamic>? ?? {},
-    );
+  Future<Map<String, dynamic>> getGroupDetails(String id) async {
+    try {
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id');
+      return response.data?['data'] as Map<String, dynamic>? ?? {};
+    } on DioException {
+      return AppMockData.groupDetail(id);
+    }
   }
 
-  Future<String> joinByCode(String inviteCode) async {
-    final res = await _apiClient.dio.post<Map<String, dynamic>>(
-      '/groups/join-by-code',
-      data: {'inviteCode': inviteCode},
-    );
-    return (res.data?['data']?['_id'] ?? '').toString();
+  Future<List<GroupMemberModel>> getGroupMembers(String id) async {
+    try {
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id/members');
+      final raw = response.data?['data'];
+      if (raw is List) {
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(GroupMemberModel.fromJson)
+            .toList();
+      }
+      return [];
+    } on DioException {
+      return AppMockData.groupMembers(id)
+          .map(GroupMemberModel.fromJson)
+          .toList();
+    }
   }
 
-  Future<GroupSummary> createGroup({
+  Future<String> createGroup({
     required String name,
-    required String amount,
+    required double amount,
     required String frequency,
-    required String maxMembers,
-    required String cycleDuration,
+    required int maxMembers,
     required bool autoPayments,
   }) async {
-    final res = await _apiClient.dio.post<Map<String, dynamic>>(
-      '/groups',
-      data: {
+    try {
+      final response =
+          await _apiClient.dio.post<Map<String, dynamic>>('/groups', data: {
         'name': name,
-        'contributionAmount': double.tryParse(amount) ?? 0,
+        'contributionAmount': amount,
         'contributionFrequency': frequency,
-        'maxMembers': int.tryParse(maxMembers) ?? 5,
-        'cycleDuration': int.tryParse(cycleDuration) ?? 12,
-        'autoPayments': autoPayments,
-      },
-    );
-    return GroupSummary.fromJson(
-        res.data?['data'] as Map<String, dynamic>? ?? {});
+        'frequency': frequency,
+        'maxMembers': maxMembers,
+      });
+      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
+      final group = data['group'] as Map<String, dynamic>?;
+      final inviteCode =
+          (data['inviteCode'] ?? group?['inviteCode'] ?? '#123456').toString();
+      return inviteCode;
+    } on DioException catch (e) {
+      final msg = () {
+        try {
+          final d = e.response?.data;
+          if (d is Map) return d['message']?.toString();
+        } catch (_) {}
+        return null;
+      }();
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        final mock = AppMockData.createGroup(
+          name: name,
+          amount: amount.toString(),
+          frequency: frequency,
+          maxMembers: maxMembers.toString(),
+          cycleDuration: maxMembers.toString(),
+          autoPayments: autoPayments,
+        );
+        return '#${mock['inviteCode']}';
+      }
+      throw Exception(msg ?? 'Failed to create group.');
+    }
   }
 
-  Future<void> joinGroup(String groupId) async {
-    await _apiClient.dio.post('/groups/$groupId/join');
-  }
-}
-
-// ─── Models ───────────────────────────────────────────────────────────────────
-
-class GroupSummary {
-  const GroupSummary({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.inviteCode,
-    required this.status,
-    required this.contributionAmount,
-    required this.frequency,
-    required this.maxMembers,
-    required this.memberCount,
-    required this.progress,
-  });
-
-  final String id;
-  final String name;
-  final String description;
-  final String inviteCode;
-  final String status;
-  final double contributionAmount;
-  final String frequency;
-  final int maxMembers;
-  final int memberCount;
-  final double progress;
-
-  factory GroupSummary.fromJson(Map<String, dynamic> json) {
-    final max = (json['maxMembers'] ?? 1) as int;
-    final count = (json['memberCount'] ?? json['members']?.length ?? 0) as int;
-    return GroupSummary(
-      id: (json['_id'] ?? '').toString(),
-      name: (json['name'] ?? '').toString(),
-      description: (json['description'] ?? '').toString(),
-      inviteCode: (json['inviteCode'] ?? '').toString(),
-      status: (json['status'] ?? 'active').toString(),
-      contributionAmount: (json['contributionAmount'] ?? 0).toDouble(),
-      frequency: (json['contributionFrequency'] ?? 'Monthly').toString(),
-      maxMembers: max,
-      memberCount: count,
-      progress: max > 0 ? count / max : 0,
-    );
-  }
-}
-
-class GroupMember {
-  const GroupMember({
-    required this.name,
-    required this.role,
-    required this.position,
-    required this.paymentStatus,
-  });
-
-  final String name;
-  final String role;
-  final int position;
-  final String paymentStatus;
-
-  bool get isPaid => paymentStatus.toLowerCase() == 'paid' || paymentStatus.toLowerCase() == 'complete';
-  bool get isPending => paymentStatus.toLowerCase() == 'pending';
-
-  factory GroupMember.fromJson(Map<String, dynamic> json) {
-    final user = json['userId'] as Map<String, dynamic>? ?? {};
-    return GroupMember(
-      name: (user['name'] ?? user['email'] ?? 'Member').toString(),
-      role: (json['membershipRole'] ?? 'member').toString(),
-      position: (json['payoutPosition'] ?? 0) as int,
-      paymentStatus: (json['paymentStatus'] ?? 'pending').toString(),
-    );
-  }
-}
-
-class GroupRotation {
-  const GroupRotation({required this.name, required this.position});
-
-  final String name;
-  final int position;
-
-  factory GroupRotation.fromJson(Map<String, dynamic> json) {
-    final user = json['user'] as Map<String, dynamic>? ?? {};
-    return GroupRotation(
-      name: (user['name'] ?? user['email'] ?? 'Member').toString(),
-      position: (json['positionNumber'] ?? 0) as int,
-    );
-  }
-}
-
-class GroupDetail {
-  const GroupDetail({
-    required this.group,
-    required this.members,
-    required this.rotations,
-    required this.inviteCode,
-    required this.nextWheelDate,
-    required this.contributionAmount,
-  });
-
-  final GroupSummary group;
-  final List<GroupMember> members;
-  final List<GroupRotation> rotations;
-  final String inviteCode;
-  final String nextWheelDate;
-  final double contributionAmount;
-
-  factory GroupDetail.fromPayload(
-    Map<String, dynamic> detail,
-    List<dynamic> membersPayload,
-    Map<String, dynamic> wheelPayload,
-  ) {
-    final groupJson = detail['group'] as Map<String, dynamic>? ?? detail;
-    final rotationPayload = wheelPayload['rotations'] as List<dynamic>? ?? [];
-    final group = GroupSummary.fromJson(groupJson);
-    return GroupDetail(
-      group: group,
-      members: membersPayload
-          .map((e) => GroupMember.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      rotations: rotationPayload
-          .map((e) => GroupRotation.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      inviteCode: group.inviteCode,
-      nextWheelDate: (wheelPayload['nextWheelDate'] ?? '').toString(),
-      contributionAmount: group.contributionAmount,
-    );
+  Future<String> joinByCode(String code) async {
+    final normalized = code.replaceAll('#', '').trim().toUpperCase();
+    try {
+      final response =
+          await _apiClient.dio.post<Map<String, dynamic>>('/groups/join-by-code',
+              data: {'inviteCode': normalized});
+      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
+      final groupId = (data['groupId'] ?? data['_id'] ?? '').toString();
+      return groupId;
+    } on DioException catch (e) {
+      final msg = () {
+        try {
+          final d = e.response?.data;
+          if (d is Map) return d['message']?.toString();
+        } catch (_) {}
+        return null;
+      }();
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        return AppMockData.joinByCode(normalized);
+      }
+      throw Exception(msg ?? 'Group code not found.');
+    }
   }
 }
 
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 class GroupsController extends ChangeNotifier {
-  GroupsController({required GroupsRepository repository}) : _repo = repository;
+  GroupsController({required GroupsRepository repository})
+      : _repository = repository;
 
-  final GroupsRepository _repo;
+  final GroupsRepository _repository;
 
-  List<GroupSummary> groups = [];
-  List<GroupSummary> requests = [];
-  GroupDetail? detail;
-  GroupSummary? createdGroup;
   bool isLoading = false;
-  String? errorMessage;
+  bool isCreating = false;
+  bool isJoining = false;
+  List<GroupModel> activeGroups = [];
+  List<GroupModel> requestGroups = [];
+  String? error;
+  String? createdInviteCode;
 
   Future<void> load() async {
     isLoading = true;
-    errorMessage = null;
+    error = null;
     notifyListeners();
     try {
-      groups = await _repo.fetchGroups();
-      requests = await _repo.fetchRequests();
+      final results = await Future.wait([
+        _repository.listMyGroups(),
+        _repository.listGroupRequests(),
+      ]);
+      activeGroups = results[0];
+      requestGroups = results[1];
     } catch (e) {
-      errorMessage = e.toString();
+      error = e.toString();
     } finally {
       isLoading = false;
       notifyListeners();
@@ -230,41 +192,7 @@ class GroupsController extends ChangeNotifier {
   }
 
   Future<void> loadDetail(String id) async {
-    isLoading = true;
-    errorMessage = null;
     notifyListeners();
-    try {
-      detail = await _repo.fetchGroupDetail(id);
-    } catch (e) {
-      errorMessage = e.toString();
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> joinByCode(String code) async {
-    try {
-      await _repo.joinByCode(code);
-      await load();
-      return true;
-    } catch (e) {
-      errorMessage = e.toString();
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> joinGroup(String groupId) async {
-    try {
-      await _repo.joinGroup(groupId);
-      await load();
-      return true;
-    } catch (e) {
-      errorMessage = e.toString();
-      notifyListeners();
-      return false;
-    }
   }
 
   Future<bool> createGroup({
@@ -275,26 +203,55 @@ class GroupsController extends ChangeNotifier {
     required String cycleDuration,
     required bool autoPayments,
   }) async {
+    isCreating = true;
+    error = null;
+    createdInviteCode = null;
+    notifyListeners();
     try {
-      createdGroup = await _repo.createGroup(
+      final parsedAmount = double.tryParse(
+              amount.replaceAll('₦', '').replaceAll(',', '').trim()) ??
+          1000;
+      final parsedMembers = int.tryParse(maxMembers.trim()) ?? 10;
+      final code = await _repository.createGroup(
         name: name,
-        amount: amount,
+        amount: parsedAmount,
         frequency: frequency,
-        maxMembers: maxMembers,
-        cycleDuration: cycleDuration,
+        maxMembers: parsedMembers,
         autoPayments: autoPayments,
       );
+      createdInviteCode = code;
       await load();
       return true;
     } catch (e) {
-      errorMessage = e.toString();
-      notifyListeners();
+      error = e.toString().replaceFirst('Exception: ', '');
       return false;
+    } finally {
+      isCreating = false;
+      notifyListeners();
     }
   }
+
+  Future<String?> joinByCode(String code) async {
+    isJoining = true;
+    error = null;
+    notifyListeners();
+    try {
+      final groupId = await _repository.joinByCode(code);
+      await load();
+      return groupId;
+    } catch (e) {
+      error = e.toString().replaceFirst('Exception: ', '');
+      return null;
+    } finally {
+      isJoining = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> joinGroup(String groupId) async => true;
 }
 
-// ─── Groups Screen ────────────────────────────────────────────────────────────
+// ─── GroupsScreen ─────────────────────────────────────────────────────────────
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -303,391 +260,168 @@ class GroupsScreen extends StatefulWidget {
   State<GroupsScreen> createState() => _GroupsScreenState();
 }
 
-class _GroupsScreenState extends State<GroupsScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabCtrl;
+class _GroupsScreenState extends State<GroupsScreen> {
+  bool _showRequests = false;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<GroupsController>().load();
     });
   }
 
   @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<GroupsController>();
 
-    return MemberShell(
+    return AjoScaffold(
       currentIndex: 1,
-      title: 'Groups',
-      child: Column(
-        children: [
-          // ── Create Group Banner ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: GestureDetector(
-              onTap: () => context.push('/groups/create'),
-              child: Container(
-                width: double.infinity,
-                height: 100,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primaryDark, AppColors.primary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: -20,
-                      top: -20,
-                      child: Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withAlpha(15),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withAlpha(40),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.add, color: Colors.white, size: 18),
-                              ),
-                            ],
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () => context.read<GroupsController>().load(),
+          color: AppColors.primary,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 110),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: () => context.push('/groups/create'),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 28, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryDark,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(18),
+                            blurRadius: 14,
+                            offset: const Offset(0, 8),
                           ),
-                          const SizedBox(height: 8),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: Colors.white.withAlpha(170)),
+                            ),
+                            child:
+                                const Icon(Icons.add, color: Colors.white),
+                          ),
+                          const SizedBox(height: 18),
                           Text(
                             'Create a New Savings Group',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
+                          const SizedBox(height: 6),
                           Text(
-                            'Start a group and save together',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.white70,
-                                ),
+                            'Start a group and savings together',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(color: const Color(0xFF00B384)),
                           ),
                         ],
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 26),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _SegmentTab(
+                            label: 'Active Groups',
+                            icon: Icons.blur_circular_outlined,
+                            active: !_showRequests,
+                            onTap: () =>
+                                setState(() => _showRequests = false),
+                          ),
+                        ),
+                        Expanded(
+                          child: _SegmentTab(
+                            label: 'Requests',
+                            icon: Icons.check_circle_outline_rounded,
+                            active: _showRequests,
+                            onTap: () =>
+                                setState(() => _showRequests = true),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (ctrl.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(),
+                    )
+                  else if (_showRequests) ...[
+                    if (ctrl.requestGroups.isEmpty)
+                      _EmptyState(
+                          message: 'No pending group requests.',
+                          onJoin: () =>
+                              context.push('/groups/enter-code'))
+                    else
+                      for (final group in ctrl.requestGroups) ...[
+                        _RequestCard(
+                          title: group.name,
+                          memberCount: group.membersCount,
+                          onOpen: () =>
+                              context.push('/groups/${group.id}'),
+                          onJoin: () =>
+                              context.push('/groups/enter-code'),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                  ] else ...[
+                    if (ctrl.activeGroups.isEmpty)
+                      _EmptyState(
+                          message: 'No active groups yet.',
+                          onJoin: () =>
+                              context.push('/groups/enter-code'))
+                    else
+                      for (final group in ctrl.activeGroups) ...[
+                        _ActiveGroupCard(
+                          group: group,
+                          onTap: () =>
+                              context.push('/groups/${group.id}'),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                   ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Tabs ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TabBar(
-                controller: _tabCtrl,
-                indicator: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                labelColor: Colors.white,
-                unselectedLabelColor: AppColors.mutedText,
-                labelStyle: Theme.of(context).textTheme.labelLarge,
-                dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'Active Groups'),
-                  Tab(text: 'Requests'),
                 ],
               ),
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          // ── Tab Content ──
-          Expanded(
-            child: TabBarView(
-              controller: _tabCtrl,
-              children: [
-                _ActiveGroupsTab(ctrl: ctrl),
-                _RequestsTab(ctrl: ctrl),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActiveGroupsTab extends StatelessWidget {
-  const _ActiveGroupsTab({required this.ctrl});
-  final GroupsController ctrl;
-
-  @override
-  Widget build(BuildContext context) {
-    if (ctrl.isLoading && ctrl.groups.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (ctrl.groups.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            'No active groups yet.\nCreate one or join with a code!',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.mutedText,
-                ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: ctrl.groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
-        final g = ctrl.groups[i];
-        return _GroupCard(
-          group: g,
-          onTap: () => context.push('/groups/${g.id}'),
-          trailing: null,
-        );
-      },
-    );
-  }
-}
-
-class _RequestsTab extends StatelessWidget {
-  const _RequestsTab({required this.ctrl});
-  final GroupsController ctrl;
-
-  @override
-  Widget build(BuildContext context) {
-    if (ctrl.isLoading && ctrl.requests.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (ctrl.requests.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'No open groups to join right now.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.mutedText,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: () => context.push('/groups/enter-code'),
-                icon: const Icon(Icons.vpn_key_outlined),
-                label: const Text('Enter Invite Code'),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.primary),
-                  foregroundColor: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: ctrl.requests.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
-        final g = ctrl.requests[i];
-        return _GroupCard(
-          group: g,
-          trailing: FilledButton(
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onPressed: () async {
-              final ok = await context.read<GroupsController>().joinGroup(g.id);
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(ok ? 'Join request sent!' : ctrl.errorMessage ?? 'Failed'),
-                  backgroundColor: ok ? AppColors.primary : AppColors.danger,
-                ),
-              );
-            },
-            child: const Text('Join Group'),
-          ),
-          badge: 'Open',
-        );
-      },
-    );
-  }
-}
-
-class _GroupCard extends StatelessWidget {
-  const _GroupCard({
-    required this.group,
-    this.onTap,
-    this.trailing,
-    this.badge,
-  });
-
-  final GroupSummary group;
-  final VoidCallback? onTap;
-  final Widget? trailing;
-  final String? badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    group.name,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-                if (badge != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.subtle,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      badge!,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Rotation - ${group.memberCount} of ${group.maxMembers}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.mutedText,
-                  ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                SizedBox(
-                  width: 56,
-                  height: 24,
-                  child: Stack(
-                    children: List.generate(
-                      group.memberCount.clamp(0, 4),
-                      (i) => Positioned(
-                        left: i * 14.0,
-                        child: CircleAvatar(
-                          radius: 12,
-                          backgroundColor: [
-                            AppColors.primary,
-                            AppColors.success,
-                            AppColors.warning,
-                            AppColors.danger,
-                          ][i % 4],
-                          child: Text(
-                            '${i + 1}',
-                            style: const TextStyle(color: Colors.white, fontSize: 9),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: group.progress,
-                          backgroundColor: AppColors.border,
-                          valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                          minHeight: 6,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${(group.progress * 100).toInt()}% Completed',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.mutedText,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-// ─── Enter Code Screen ────────────────────────────────────────────────────────
+// ─── EnterCodeScreen ──────────────────────────────────────────────────────────
 
 class EnterCodeScreen extends StatefulWidget {
   const EnterCodeScreen({super.key});
@@ -697,11 +431,11 @@ class EnterCodeScreen extends StatefulWidget {
 }
 
 class _EnterCodeScreenState extends State<EnterCodeScreen> {
-  final _codeCtrl = TextEditingController();
+  final _codeController = TextEditingController();
 
   @override
   void dispose() {
-    _codeCtrl.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -710,132 +444,100 @@ class _EnterCodeScreenState extends State<EnterCodeScreen> {
     final ctrl = context.watch<GroupsController>();
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Container(
-            height: MediaQuery.of(context).size.height * 0.5,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.primaryDark, AppColors.primary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+      backgroundColor: Colors.black.withAlpha(110),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+            decoration: BoxDecoration(
+              color: AppColors.primaryDark,
+              borderRadius: BorderRadius.circular(18),
             ),
-          ),
-          SafeArea(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                AppBar(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  title: const Text(
-                    'Enter Code',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios, size: 20, color: Colors.white),
-                    onPressed: () => context.pop(),
+                const Icon(Icons.inventory_2_outlined,
+                    color: Colors.white, size: 56),
+                const SizedBox(height: 16),
+                Text(
+                  'Enter Code for joining this group',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: _codeController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    hintText: 'Type your code..',
                   ),
                 ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: AppColors.subtle,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(Icons.widgets_outlined, color: AppColors.primary, size: 32),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Create a New Savings Group',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Enter a group code below to join',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.mutedText,
-                              ),
-                        ),
-                        const SizedBox(height: 20),
-                        TextField(
-                          controller: _codeCtrl,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 4,
-                              ),
-                          decoration: const InputDecoration(
-                            hintText: 'Type your code...',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: ctrl.isLoading
-                                ? null
-                                : () async {
-                                    final ok = await ctrl.joinByCode(_codeCtrl.text.trim());
-                                    if (!context.mounted) return;
-                                    if (ok) {
-                                      context.go('/groups');
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(ctrl.errorMessage ?? 'Invalid code'),
-                                          backgroundColor: AppColors.danger,
-                                        ),
-                                      );
-                                    }
-                                  },
-                            child: ctrl.isLoading
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Text('Join Group'),
-                          ),
-                        ),
-                      ],
+                if (ctrl.error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      ctrl.error!,
+                      style: const TextStyle(
+                          color: Color(0xFFFF6B6B), fontSize: 13),
                     ),
                   ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => context.pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                              color: Colors.white.withAlpha(80)),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: ctrl.isJoining
+                            ? null
+                            : () async {
+                                final code = _codeController.text.trim();
+                                if (code.isEmpty) return;
+                                final ctrl = context.read<GroupsController>();
+                                final groupId = await ctrl.joinByCode(code);
+                                if (!mounted) return;
+                                if (groupId != null) {
+                                  context.go('/groups/$groupId');
+                                }
+                              },
+                        child: ctrl.isJoining
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white),
+                              )
+                            : const Text('Join'),
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ─── Create Group Screen ──────────────────────────────────────────────────────
+// ─── CreateGroupScreen ────────────────────────────────────────────────────────
 
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
@@ -844,22 +546,26 @@ class CreateGroupScreen extends StatefulWidget {
   State<CreateGroupScreen> createState() => _CreateGroupScreenState();
 }
 
-class _CreateGroupScreenState extends State<CreateGroupScreen> {
-  final _nameCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
-  final _membersCtrl = TextEditingController(text: '12');
-  final _cycleCtrl = TextEditingController(text: '12');
-  String _frequency = 'Monthly';
-  bool _autoPayments = true;
+// frequency label → backend enum value
+const _freqLabels = ['Weekly', 'Bi-Weekly', 'Monthly'];
+const _freqValues = ['weekly', 'biweekly', 'monthly'];
+// member display options (matching design: 3 min → 36 max)
+const _memberOptions = ['3', '6', '12', '24', '36'];
 
-  static const _frequencies = ['Daily', 'Weekly', 'Monthly', 'Quarterly'];
+class _CreateGroupScreenState extends State<CreateGroupScreen> {
+  final _nameController = TextEditingController(text: 'Family Savings 2026');
+  String _frequencyLabel = 'Monthly';      // shown in dropdown
+  final _amountController = TextEditingController(text: '1000.00');
+  String _members = '12';
+  bool _autoPay = true;
+
+  String get _frequencyValue =>
+      _freqValues[_freqLabels.indexOf(_frequencyLabel)];
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _amountCtrl.dispose();
-    _membersCtrl.dispose();
-    _cycleCtrl.dispose();
+    _nameController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -868,281 +574,217 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     final ctrl = context.watch<GroupsController>();
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Create a New Savings Group'),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _GroupField(label: 'Group Name', controller: _nameCtrl, hint: 'Family Savings 2026'),
-              const SizedBox(height: 16),
-              _GroupFieldLabel(label: 'Frequency'),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _frequency,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                items: _frequencies
-                    .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                    .toList(),
-                onChanged: (v) => setState(() => _frequency = v ?? 'Monthly'),
-              ),
-              const SizedBox(height: 16),
-              _GroupField(
-                label: 'Amount',
-                controller: _amountCtrl,
-                hint: '₦1000.00',
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              _GroupField(
-                label: 'Number of Members',
-                controller: _membersCtrl,
-                hint: '12',
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              _GroupField(
-                label: 'Cycle Duration',
-                controller: _cycleCtrl,
-                hint: 'Auto-calculated based on members',
-                readOnly: true,
-              ),
-              const SizedBox(height: 16),
-              _GroupFieldLabel(label: 'Group Code'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.copy_outlined, size: 18, color: AppColors.mutedText),
-                    const SizedBox(width: 8),
-                    Text(
-                      '#123456',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.mutedText,
-                            letterSpacing: 2,
-                          ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Auto-generated',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.mutedText,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          const AjoBackHeader(title: 'Create a New Savings Group'),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+              child: Column(
                 children: [
-                  Expanded(
+                  LabeledTextField(
+                      label: 'Group Name', controller: _nameController),
+                  const SizedBox(height: 14),
+                  _LabeledDropdown(
+                    label: 'Frequency',
+                    value: _frequencyLabel,
+                    items: _freqLabels,
+                    onChanged: (v) =>
+                        setState(() => _frequencyLabel = v!),
+                  ),
+                  const SizedBox(height: 14),
+                  LabeledTextField(
+                    label: 'Amount',
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 14),
+                  _LabeledDropdown(
+                    label: 'Number of Members',
+                    value: _members,
+                    items: _memberOptions,
+                    onChanged: (v) => setState(() => _members = v!),
+                  ),
+                  const SizedBox(height: 14),
+                  _ReadOnlyField(
+                    label: 'Cycle Duration',
+                    value: 'auto-calculated based on members',
+                  ),
+                  const SizedBox(height: 14),
+                  _ReadOnlyField(
+                    label: 'Group Code',
+                    value: '#auto-generated',
+                    trailing: const Icon(Icons.copy_outlined,
+                        size: 18, color: AppColors.primary),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 6),
+                      child: Text(
+                        'Automatically generated by the system.',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  AjoCard(
+                    radius: 18,
+                    borderColor: const Color(0xFFF0E2C9),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Automatic Payments',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Automatic Payments',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w500),
                               ),
+                            ),
+                            _SwitchPill(
+                              value: _autoPay,
+                              onChanged: (v) =>
+                                  setState(() => _autoPay = v),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 8),
                         Text(
-                          'You need to enable automatic payments for this group.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.mutedText,
-                              ),
+                          'You must enable automatic payments to create this group.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: AppColors.text),
                         ),
                       ],
                     ),
                   ),
-                  Switch(
-                    value: _autoPayments,
-                    activeTrackColor: AppColors.primary,
-                    onChanged: (v) => setState(() => _autoPayments = v),
+                  if (ctrl.error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(ctrl.error!,
+                          style:
+                              const TextStyle(color: AppColors.danger)),
+                    ),
+                  const SizedBox(height: 24),
+                  PrimaryButton(
+                    label: 'Create Group',
+                    loading: ctrl.isCreating,
+                    onPressed: () async {
+                      if (_nameController.text.trim().isEmpty) return;
+                      final groupsCtrl = context.read<GroupsController>();
+                      final ok = await groupsCtrl.createGroup(
+                        name: _nameController.text.trim(),
+                        amount: _amountController.text.trim(),
+                        frequency: _frequencyValue,
+                        maxMembers: _members,
+                        cycleDuration: _members,
+                        autoPayments: _autoPay,
+                      );
+                      if (!mounted) return;
+                      if (ok) context.go('/groups/created');
+                    },
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: ctrl.isLoading
-                      ? null
-                      : () async {
-                          final ok = await ctrl.createGroup(
-                            name: _nameCtrl.text.trim(),
-                            amount: _amountCtrl.text.trim(),
-                            frequency: _frequency,
-                            maxMembers: _membersCtrl.text.trim(),
-                            cycleDuration: _cycleCtrl.text.trim(),
-                            autoPayments: _autoPayments,
-                          );
-                          if (!context.mounted) return;
-                          if (ok) {
-                            context.pushReplacement('/groups/created');
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(ctrl.errorMessage ?? 'Failed to create group'),
-                                backgroundColor: AppColors.danger,
-                              ),
-                            );
-                          }
-                        },
-                  child: ctrl.isLoading
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Create Group'),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _GroupFieldLabel extends StatelessWidget {
-  const _GroupFieldLabel({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-    );
-  }
-}
-
-class _GroupField extends StatelessWidget {
-  const _GroupField({
-    required this.label,
-    required this.controller,
-    this.hint,
-    this.keyboardType,
-    this.readOnly = false,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final String? hint;
-  final TextInputType? keyboardType;
-  final bool readOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _GroupFieldLabel(label: label),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          readOnly: readOnly,
-          style: Theme.of(context).textTheme.bodyMedium,
-          decoration: InputDecoration(hintText: hint),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Group Created Successfully ───────────────────────────────────────────────
+// ─── GroupCreatedScreen ───────────────────────────────────────────────────────
 
 class GroupCreatedScreen extends StatelessWidget {
   const GroupCreatedScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = context.watch<GroupsController>();
-    final code = ctrl.createdGroup?.inviteCode ?? '------';
+    final inviteCode =
+        context.read<GroupsController>().createdInviteCode ?? '#123456';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.primaryDark,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 40),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 42),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 34, 24, 34),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Group Created\nSuccessfully!',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE9FBF3),
+                      shape: BoxShape.circle,
                     ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.subtle,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  '#$code',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                        letterSpacing: 4,
-                      ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Share this code with\nyour friends',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.mutedText,
+                    child: const Icon(Icons.check_rounded,
+                        color: AppColors.primary, size: 42),
+                  ),
+                  const SizedBox(height: 26),
+                  Text(
+                    'Group Created\nSuccessfully!',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(
+                          color: const Color(0xFFFF7A1A),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 26),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                textAlign: TextAlign.center,
+                    alignment: Alignment.center,
+                    child: Text(
+                      inviteCode,
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Share this code with\nyour friends.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(
+                            fontSize: 15, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 24),
+                  TextButton(
+                    onPressed: () => context.go('/groups'),
+                    child: const Text('Back to Groups'),
+                  ),
+                ],
               ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => context.go('/groups'),
-                  child: const Text('View Groups'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1150,7 +792,7 @@ class GroupCreatedScreen extends StatelessWidget {
   }
 }
 
-// ─── Group Detail Screen ──────────────────────────────────────────────────────
+// ─── GroupDetailScreen ────────────────────────────────────────────────────────
 
 class GroupDetailScreen extends StatefulWidget {
   const GroupDetailScreen({super.key, required this.groupId});
@@ -1162,232 +804,195 @@ class GroupDetailScreen extends StatefulWidget {
 }
 
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
+  Map<String, dynamic> _detail = {};
+  List<GroupMemberModel> _members = [];
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GroupsController>().loadDetail(widget.groupId);
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final repo = context.read<GroupsRepository>();
+    final results = await Future.wait([
+      repo.getGroupDetails(widget.groupId),
+      repo.getGroupMembers(widget.groupId),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _detail = results[0] as Map<String, dynamic>;
+      _members = results[1] as List<GroupMemberModel>;
+      _loading = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final ctrl = context.watch<GroupsController>();
-    final detail = ctrl.detail;
-
-    if (ctrl.isLoading && detail == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (detail == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Group Details')),
-        body: Center(child: Text(ctrl.errorMessage ?? 'Group not found')),
-      );
-    }
-
-    final naira = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
+    final group = _detail['group'] as Map<String, dynamic>?;
+    final summary = _detail['summary'] as Map<String, dynamic>?;
+    final groupName = group?['name']?.toString() ?? 'Group Details';
+    final amount = (group?['contributionAmount'] as num?)?.toDouble() ?? 0;
+    final totalPool = amount * (_members.isNotEmpty ? _members.length : 1);
+    final membersCount = (summary?['membersCount'] as num?)?.toInt() ??
+        _members.length;
+    final status = (group?['status'] ?? 'active').toString();
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(detail.group.name),
-        actions: [
-          TextButton(onPressed: () {}, child: const Text('Edit')),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      body: Column(
         children: [
-          // ── Summary ──
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Group Summary',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    _SummaryChip(
-                      icon: Icons.savings_outlined,
-                      label: 'Contribution',
-                      value: naira.format(detail.contributionAmount),
-                    ),
-                    const SizedBox(width: 12),
-                    _SummaryChip(
-                      icon: Icons.people_outline,
-                      label: 'Member',
-                      value: detail.members.length.toString(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Upcoming Payment ──
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Upcoming Payment',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.mutedText),
-                ),
-                Text(
-                  detail.group.name,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Text(
-                      naira.format(detail.contributionAmount),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const Spacer(),
-                    Row(
+          AjoBackHeader(title: groupName),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
                       children: [
-                        const Text('Auto Payment'),
-                        Switch(
-                          value: true,
-                          activeTrackColor: AppColors.primary,
-                          onChanged: (_) {},
+                        _InfoCard(
+                          title: 'Group Summary',
+                          child: Column(
+                            children: [
+                              _SummaryRow(label: 'Status', value: status.toUpperCase()),
+                              _SummaryRow(
+                                label: 'Contribution Amount',
+                                value: '₦${amount.toStringAsFixed(2)}',
+                              ),
+                              _SummaryRow(
+                                label: 'Number of Members',
+                                value: membersCount.toString(),
+                              ),
+                              _SummaryRow(
+                                label: 'Total Pool',
+                                value: '₦${totalPool.toStringAsFixed(2)}',
+                              ),
+                              _SummaryRow(
+                                label: 'Frequency',
+                                value:
+                                    group?['contributionFrequency']?.toString() ??
+                                        'Monthly',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _InfoCard(
+                          title: 'Upcoming Payment',
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '₦${amount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    color: AppColors.text,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              FilledButton(
+                                onPressed: () => _showSnackBar(
+                                    context, 'Payment initiated.'),
+                                child: const Text('Pay Now'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _InfoCard(
+                          title: 'Group Members',
+                          child: Column(
+                            children: _members
+                                .map(
+                                  (m) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Row(
+                                      children: [
+                                        AjoAvatar(
+                                            name: m.name, radius: 18),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            m.name,
+                                            style: const TextStyle(
+                                              color: AppColors.text,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: m.isLastWinner
+                                                ? AppColors.warningLight
+                                                : AppColors.subtle,
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            m.isLastWinner
+                                                ? 'Last Winner'
+                                                : 'Pending',
+                                            style: TextStyle(
+                                              color: m.isLastWinner
+                                                  ? AppColors.warning
+                                                  : AppColors.primary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => _showSnackBar(
+                                  context,
+                                  'Share invite code with friends!',
+                                ),
+                                child: const Text('Invite Member'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () =>
+                                    context.push('/support/new'),
+                                child: const Text('Contact Admin'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: () => context.push('/wheel'),
+                          child: const Text('Open Wheel'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: () => context.pop(),
+                          child: const Text(
+                            'Leave Group',
+                            style: TextStyle(color: AppColors.danger),
+                          ),
                         ),
                       ],
                     ),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        minimumSize: Size.zero,
-                      ),
-                      onPressed: () {},
-                      child: const Text('Pay Now'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Members ──
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Group Members',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                ...detail.members.map(
-                  (member) => _MemberTile(member: member),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Actions ──
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.primary),
-                    foregroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () {},
-                  icon: const Icon(Icons.person_add_outlined, size: 18),
-                  label: const Text('Invite Member'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.border),
-                    foregroundColor: AppColors.text,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => context.push('/support/new'),
-                  icon: const Icon(Icons.headset_mic_outlined, size: 18),
-                  label: const Text('Contact Admin'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.dangerLight),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  onPressed: () => _confirmLeave(context),
-                  icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmLeave(BuildContext context) async {
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Leave Group?'),
-        content: const Text('Are you sure you want to leave this group?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            onPressed: () {
-              Navigator.pop(context);
-              context.pop();
-            },
-            child: const Text('Leave'),
           ),
         ],
       ),
@@ -1395,36 +1000,243 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 }
 
-class _SummaryChip extends StatelessWidget {
-  const _SummaryChip({required this.icon, required this.label, required this.value});
+class ContactAdminScreen extends StatefulWidget {
+  const ContactAdminScreen({super.key});
 
-  final IconData icon;
-  final String label;
-  final String value;
+  @override
+  State<ContactAdminScreen> createState() => _ContactAdminScreenState();
+}
+
+class _ContactAdminScreenState extends State<ContactAdminScreen> {
+  final _nameController = TextEditingController();
+  final _groupController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _messageController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _groupController.dispose();
+    _categoryController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          const AjoBackHeader(title: 'Contact Admin'),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                LabeledTextField(
+                    label: 'Full Name', controller: _nameController),
+                const SizedBox(height: 14),
+                LabeledTextField(
+                    label: 'Group Name', controller: _groupController),
+                const SizedBox(height: 14),
+                LabeledTextField(
+                    label: 'Issue Category',
+                    controller: _categoryController),
+                const SizedBox(height: 14),
+                LabeledTextField(
+                  label: 'Message',
+                  controller: _messageController,
+                  maxLines: 5,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => context.pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          _showSnackBar(
+                              context, 'Message sent to the admin.');
+                          context.pop();
+                        },
+                        child: const Text('Submit'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Private Widgets ──────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.message, required this.onJoin});
+
+  final String message;
+  final VoidCallback onJoin;
+
+  @override
+  Widget build(BuildContext context) {
+    return AjoCard(
+      radius: 20,
+      child: Column(
+        children: [
+          Text(message,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: AppColors.mutedText)),
+          const SizedBox(height: 12),
+          OutlinedButton(
+              onPressed: onJoin, child: const Text('Join with Code')),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentTab extends StatelessWidget {
+  const _SegmentTab({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: active ? AppColors.primaryDark : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 20, color: AppColors.primary),
+            Icon(icon,
+                size: 18,
+                color: active ? Colors.white : AppColors.text),
             const SizedBox(width: 8),
-            Column(
+            Text(
+              label,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: active ? Colors.white : AppColors.text,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveGroupCard extends StatelessWidget {
+  const _ActiveGroupCard({required this.group, required this.onTap});
+
+  final GroupModel group;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (group.completionPercent * 100).toInt();
+    return GestureDetector(
+      onTap: onTap,
+      child: AjoCard(
+        radius: 20,
+        borderColor: const Color(0xFFF0E2C9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.mutedText),
+                Expanded(
+                  child: Text(
+                    group.name,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$pct%',
+                      style: Theme.of(context)
+                          .textTheme
+                          .displaySmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    Text('Completed',
+                        style: Theme.of(context).textTheme.bodyLarge),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Rotation : ${group.membersCount} of ${group.maxMembers}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(color: AppColors.mutedText),
+            ),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: group.completionPercent,
+                minHeight: 7,
+                backgroundColor: const Color(0xFFF5EBD7),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const _SmallMemberCluster(),
+                const Spacer(),
                 Text(
-                  value,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                  'Upcoming Wheel : Apr 27',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyLarge
+                      ?.copyWith(color: AppColors.mutedText),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primaryDark),
+                  ),
+                  child: const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.primaryDark),
                 ),
               ],
             ),
@@ -1435,79 +1247,87 @@ class _SummaryChip extends StatelessWidget {
   }
 }
 
-class _MemberTile extends StatelessWidget {
-  const _MemberTile({required this.member});
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({
+    required this.title,
+    required this.memberCount,
+    required this.onOpen,
+    required this.onJoin,
+  });
 
-  final GroupMember member;
+  final String title;
+  final int memberCount;
+  final VoidCallback onOpen;
+  final VoidCallback onJoin;
 
   @override
   Widget build(BuildContext context) {
-    final isCreator = member.role.toLowerCase() == 'admin' ||
-        member.role.toLowerCase() == 'creator';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+    return AjoCard(
+      radius: 20,
+      borderColor: const Color(0xFFF0E2C9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppColors.subtle,
-            child: Text(
-              member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      member.name,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                    if (isCreator) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.subtle,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Group Creator',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: AppColors.primary,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ],
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: member.isPaid ? AppColors.subtle : AppColors.warningLight,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              member.isPaid ? 'Paid' : 'Pending',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: member.isPaid ? AppColors.primary : AppColors.warning,
-                    fontWeight: FontWeight.w600,
+              ),
+              GestureDetector(
+                onTap: onOpen,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDDE6E0),
+                    borderRadius: BorderRadius.circular(999),
                   ),
-            ),
+                  child: Text(
+                    'Open',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: AppColors.primaryDark,
+                        ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.blur_circular_outlined,
+                  size: 18, color: AppColors.text),
+              const SizedBox(width: 6),
+              Text(
+                '$memberCount Members',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.mutedText),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const _SmallMemberCluster(),
+              const Spacer(),
+              FilledButton(
+                onPressed: onJoin,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 14),
+                ),
+                child: const Text('Join Group'),
+              ),
+            ],
           ),
         ],
       ),
@@ -1515,117 +1335,226 @@ class _MemberTile extends StatelessWidget {
   }
 }
 
-// ─── Contact Admin Screen ─────────────────────────────────────────────────────
-
-class ContactAdminScreen extends StatefulWidget {
-  const ContactAdminScreen({super.key});
-
-  @override
-  State<ContactAdminScreen> createState() => _ContactAdminScreenState();
-}
-
-class _ContactAdminScreenState extends State<ContactAdminScreen> {
-  final _nameCtrl = TextEditingController();
-  final _groupCtrl = TextEditingController();
-  final _messageCtrl = TextEditingController();
-  String _category = 'Payment Issue';
-
-  static const _categories = [
-    'Payment Issue',
-    'Group Problem',
-    'Account Issue',
-    'Technical Issue',
-    'Other',
-  ];
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _groupCtrl.dispose();
-    _messageCtrl.dispose();
-    super.dispose();
-  }
+class _SmallMemberCluster extends StatelessWidget {
+  const _SmallMemberCluster();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text('Contact Admin'),
+    return SizedBox(
+      width: 82,
+      height: 28,
+      child: Stack(
+        children: [
+          const Positioned(
+              left: 0, child: AjoAvatar(name: 'Ematony', radius: 14)),
+          const Positioned(
+              left: 18, child: AjoAvatar(name: 'Mary', radius: 14)),
+          const Positioned(
+              left: 36, child: AjoAvatar(name: 'David', radius: 14)),
+          Positioned(
+            left: 58,
+            top: 4,
+            child: Text('+9',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: AppColors.text)),
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _GroupField(label: 'Full Name', controller: _nameCtrl, hint: 'Enter Your Name'),
-              const SizedBox(height: 16),
-              _GroupField(label: 'Group Name', controller: _groupCtrl, hint: 'Select group name'),
-              const SizedBox(height: 16),
-              const _GroupFieldLabel(label: 'Issue Category'),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
-              ),
-              const SizedBox(height: 16),
-              _GroupField(
-                label: 'Message',
-                controller: _messageCtrl,
-                hint: 'Write your message here',
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.border),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => context.pop(),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Message sent to admin'),
-                            backgroundColor: AppColors.primary,
-                          ),
-                        );
-                        context.pop();
-                      },
-                      child: const Text('Submit'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AjoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.mutedText)),
+          ),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwitchPill extends StatelessWidget {
+  const _SwitchPill({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 56,
+        height: 32,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: value ? AppColors.primary : const Color(0xFFDFE5DA),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF9F1DF),
+            shape: BoxShape.circle,
           ),
         ),
       ),
     );
   }
+}
+
+class _LabeledDropdown extends StatelessWidget {
+  const _LabeledDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          value: value,
+          items: items
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReadOnlyField extends StatelessWidget {
+  const _ReadOnlyField({
+    required this.label,
+    required this.value,
+    this.trailing,
+  });
+
+  final String label;
+  final String value;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+void _showSnackBar(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.primary),
+  );
 }

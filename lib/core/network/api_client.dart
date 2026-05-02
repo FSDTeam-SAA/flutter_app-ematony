@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
 import '../config/app_config.dart';
 import '../storage/session_storage.dart';
@@ -14,6 +16,7 @@ class ApiClient {
             headers: const {'Content-Type': 'application/json'},
           ),
         ) {
+    // Auth token interceptor
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -25,6 +28,20 @@ class ApiClient {
         },
       ),
     );
+
+    // Pretty logger — debug builds only
+    if (kDebugMode) {
+      dio.interceptors.add(
+        PrettyDioLogger(
+          requestHeader: true,
+          requestBody: true,
+          responseBody: true,
+          responseHeader: false,
+          error: true,
+          compact: false,
+        ),
+      );
+    }
   }
 
   final Dio dio;
