@@ -104,7 +104,7 @@ class GroupsRepository {
       final data = response.data?['data'] as Map<String, dynamic>? ?? {};
       final group = data['group'] as Map<String, dynamic>?;
       final inviteCode =
-          (data['inviteCode'] ?? group?['inviteCode'] ?? '#123456').toString();
+          (data['inviteCode'] ?? group?['inviteCode'] ?? '').toString();
       return inviteCode;
     } on DioException catch (e) {
       final msg = () {
@@ -604,6 +604,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                     label: 'Number of Members',
                     value: _members,
                     items: _memberOptions,
+                    itemLabelBuilder: (v) => v == _memberOptions.first
+                        ? '$v Minimum'
+                        : v == _memberOptions.last
+                            ? '$v Maximum'
+                            : v,
                     onChanged: (v) => setState(() => _members = v!),
                   ),
                   const SizedBox(height: 14),
@@ -1460,12 +1465,14 @@ class _LabeledDropdown extends StatelessWidget {
     required this.value,
     required this.items,
     required this.onChanged,
+    this.itemLabelBuilder,
   });
 
   final String label;
   final String value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
+  final String Function(String value)? itemLabelBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -1481,7 +1488,10 @@ class _LabeledDropdown extends StatelessWidget {
         DropdownButtonFormField<String>(
           value: value,
           items: items
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .map((e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(itemLabelBuilder?.call(e) ?? e),
+                  ))
               .toList(),
           onChanged: onChanged,
           decoration: InputDecoration(

@@ -8,8 +8,8 @@ class AppMockData {
   static Map<String, dynamic> _currentUser = {
     '_id': 'user-001',
     'name': 'Amina Balogun',
-    'email': 'amina@ajofamily.app',
-    'phone': '+234 803 555 0112',
+    'email': '',
+    'phone': '',
     'role': 'member',
     'kycVerified': true,
   };
@@ -84,7 +84,7 @@ class AppMockData {
       id: 'grp-001',
       name: 'Ajo Family Circle',
       description: 'Monthly family savings rotation for home projects.',
-      inviteCode: '123456',
+      inviteCode: '',
       contributionAmount: 25000,
       contributionFrequency: 'Monthly',
       maxMembers: 10,

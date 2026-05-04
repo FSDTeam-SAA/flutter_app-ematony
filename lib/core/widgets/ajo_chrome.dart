@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+// ignore: unnecessary_import
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
+import '../../features/groups/groups_feature.dart';
 import '../config/app_assets.dart';
 import '../theme/app_colors.dart';
 
@@ -52,7 +56,7 @@ class AjoBottomNav extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: SizedBox(
-          height: 90,
+          height: 98,
           child: Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.topCenter,
@@ -78,26 +82,40 @@ class AjoBottomNav extends StatelessWidget {
               ),
               Positioned(
                 top: 0,
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(22),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+                child: Builder(
+                  builder: (context) {
+                    final hasGroups = context
+                        .select<GroupsController, bool>(
+                            (c) => c.activeGroups.isNotEmpty);
+                    return Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: hasGroups ? null : AppColors.primaryDark,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(22),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      AppAssets.wheelSpinner,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                      child: hasGroups
+                          ? ClipOval(
+                              child: Image.asset(
+                                AppAssets.wheelSpinner,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.group_outlined,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -120,13 +138,13 @@ class AjoBottomNav extends StatelessWidget {
         }
       },
       child: Padding(
-        padding: const EdgeInsets.only(top: 22),
+        padding: const EdgeInsets.only(top: 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 50,
-              height: 40,
+              height: 36,
               decoration: BoxDecoration(
                 color: isActive ? AppColors.primaryDark : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
@@ -169,32 +187,40 @@ class AjoPatternHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: AppColors.primaryDark,
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(bottomRadius),
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _HeaderPatternPainter(),
+      child: Container(
+        width: double.infinity,
+        height: height,
+        decoration: BoxDecoration(
+          color: AppColors.primaryDark,
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(bottomRadius),
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _HeaderPatternPainter(),
+              ),
             ),
-          ),
-          Padding(
-            padding: padding ??
-                EdgeInsets.fromLTRB(
-                  16,
-                  MediaQuery.of(context).padding.top + 12,
-                  16,
-                  20,
-                ),
-            child: child,
-          ),
-        ],
+            Padding(
+              padding: padding ??
+                  EdgeInsets.fromLTRB(
+                    16,
+                    MediaQuery.of(context).padding.top + 12,
+                    16,
+                    20,
+                  ),
+              child: child,
+            ),
+          ],
+        ),
       ),
     );
   }

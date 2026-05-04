@@ -118,7 +118,7 @@ class _WalletScreenState extends State<WalletScreen> {
             child: Column(
               children: [
                 AjoPatternHeader(
-                  height: 188,
+                  height: 252,
                   bottomRadius: 28,
                   child: Column(
                     children: [
@@ -196,8 +196,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           ),
                           const SizedBox(width: 18),
                           _ActionSquare(
-                            icon: Icons.north_rounded,
-                            quarterTurns: 2,
+                            icon: Icons.upload_outlined,
                             iconBg: AppColors.dangerLight,
                             iconColor: AppColors.danger,
                             label: 'Withdraw',
@@ -323,7 +322,6 @@ class _ActionSquare extends StatelessWidget {
     required this.iconColor,
     required this.label,
     required this.onTap,
-    this.quarterTurns = 0,
   });
 
   final IconData icon;
@@ -331,7 +329,6 @@ class _ActionSquare extends StatelessWidget {
   final Color iconColor;
   final String label;
   final VoidCallback onTap;
-  final int quarterTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -346,10 +343,7 @@ class _ActionSquare extends StatelessWidget {
               color: iconBg,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: RotatedBox(
-              quarterTurns: quarterTurns,
-              child: Icon(icon, color: iconColor, size: 24),
-            ),
+            child: Icon(icon, color: iconColor, size: 24),
           ),
           const SizedBox(height: 8),
           Text(
@@ -383,13 +377,10 @@ class _TransactionRow extends StatelessWidget {
               color: tx.isTopUp ? AppColors.subtle : AppColors.dangerLight,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: RotatedBox(
-              quarterTurns: tx.isTopUp ? 0 : 2,
-              child: Icon(
-                Icons.north_east_rounded,
-                color: tx.isTopUp ? AppColors.primary : AppColors.danger,
-                size: 24,
-              ),
+            child: Icon(
+              tx.isTopUp ? Icons.north_east_rounded : Icons.upload_outlined,
+              color: tx.isTopUp ? AppColors.primary : AppColors.danger,
+              size: 24,
             ),
           ),
           const SizedBox(width: 12),

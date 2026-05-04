@@ -11,16 +11,9 @@ class WheelScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const members = [
-      'John',
-      'David',
-      'Mary',
-      'Grace',
-      'Grace',
-      'Grace',
-      'Paul',
-      'Paul',
-    ];
+    // Until real group members exist, render placeholder slots.
+    const List<String> members = <String>[];
+    const slotCount = 8;
 
     return AjoScaffold(
       currentIndex: -1,
@@ -162,7 +155,10 @@ class WheelScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: () => context.push('/wheel/winner?name=Ematony&amount=%E2%82%A612000'),
-                      child: _WheelDisc(names: members),
+                      child: _WheelDisc(
+                        names: members,
+                        slotCount: slotCount,
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Align(
@@ -175,17 +171,29 @@ class WheelScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    ...List.generate(
-                      members.length,
-                      (index) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _WheelMemberRow(
-                          index: index + 1,
-                          name: members[index],
-                          winner: index == 0,
+                    if (members.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Text(
+                          'No members yet. Invite people to fill the wheel.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: AppColors.mutedText,
+                              ),
+                        ),
+                      )
+                    else
+                      ...List.generate(
+                        members.length,
+                        (index) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _WheelMemberRow(
+                            index: index + 1,
+                            name: members[index],
+                            winner: index == 0,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -347,12 +355,15 @@ class _PoolMeta extends StatelessWidget {
 class _WheelDisc extends StatelessWidget {
   const _WheelDisc({
     required this.names,
+    this.slotCount = 8,
   });
 
   final List<String> names;
+  final int slotCount;
 
   @override
   Widget build(BuildContext context) {
+    final count = names.isEmpty ? slotCount : names.length;
     return SizedBox(
       width: 330,
       height: 330,
@@ -370,11 +381,13 @@ class _WheelDisc extends StatelessWidget {
               ),
             ),
           ),
-          for (var i = 0; i < names.length; i++)
+          for (var i = 0; i < count; i++)
             Positioned(
-              left: 165 + 120 * math.cos((2 * math.pi * i / names.length) - math.pi / 2) - 28,
-              top: 165 + 120 * math.sin((2 * math.pi * i / names.length) - math.pi / 2) - 28,
-              child: AjoAvatar(name: names[i], radius: 28),
+              left: 165 + 120 * math.cos((2 * math.pi * i / count) - math.pi / 2) - 28,
+              top: 165 + 120 * math.sin((2 * math.pi * i / count) - math.pi / 2) - 28,
+              child: i < names.length
+                  ? AjoAvatar(name: names[i], radius: 28)
+                  : const _WheelSlotPlaceholder(),
             ),
           Container(
             width: 126,
@@ -394,6 +407,29 @@ class _WheelDisc extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WheelSlotPlaceholder extends StatelessWidget {
+  const _WheelSlotPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withAlpha(40),
+        border: Border.all(color: Colors.white.withAlpha(140), width: 2),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.person_outline_rounded,
+        color: Colors.white.withAlpha(220),
+        size: 28,
       ),
     );
   }

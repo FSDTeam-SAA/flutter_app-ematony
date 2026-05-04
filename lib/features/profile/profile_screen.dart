@@ -195,12 +195,19 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AjoPatternHeader(
-                height: 234,
+                height: 296,
                 bottomRadius: 28,
                 child: Column(
                   children: [
-                    const SizedBox(height: 34),
-                    AjoAvatar(name: name, radius: 34),
+                    const SizedBox(height: 14),
+                    user?.avatarUrl != null
+                        ? CircleAvatar(
+                            radius: 54,
+                            backgroundColor: Colors.white,
+                            backgroundImage: NetworkImage(user!.avatarUrl!),
+                            onBackgroundImageError: (_, _) {},
+                          )
+                        : AjoAvatar(name: name, radius: 54),
                     const SizedBox(height: 14),
                     Text(
                       name,

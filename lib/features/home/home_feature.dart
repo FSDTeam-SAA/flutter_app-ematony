@@ -449,8 +449,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 14),
                       Expanded(
                         child: _QuickActionCard(
-                          icon: Icons.north_rounded,
-                          rotateQuarterTurns: 2,
+                          icon: Icons.upload_outlined,
                           iconTint: AppColors.danger,
                           iconBg: AppColors.dangerLight,
                           label: 'Withdraw',
@@ -561,7 +560,6 @@ class _QuickActionCard extends StatelessWidget {
     required this.iconBg,
     required this.label,
     required this.onTap,
-    this.rotateQuarterTurns = 0,
   });
 
   final IconData icon;
@@ -569,7 +567,6 @@ class _QuickActionCard extends StatelessWidget {
   final Color iconBg;
   final String label;
   final VoidCallback onTap;
-  final int rotateQuarterTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -587,10 +584,7 @@ class _QuickActionCard extends StatelessWidget {
                 color: iconBg,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: RotatedBox(
-                quarterTurns: rotateQuarterTurns,
-                child: Icon(icon, color: iconTint, size: 28),
-              ),
+              child: Icon(icon, color: iconTint, size: 28),
             ),
             const SizedBox(height: 14),
             Text(
