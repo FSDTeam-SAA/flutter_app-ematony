@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -144,6 +145,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  String _phoneCountryCode = '+880';
+  String _phoneFull = '';
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _agreeTerms = false;
@@ -179,11 +182,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
             hintText: 'Enter your full name',
           ),
           const SizedBox(height: 16),
-          LabeledTextField(
-            label: 'Phone Number',
+          _PhoneNumberField(
             controller: _phoneCtrl,
-            hintText: 'Enter your phone number',
-            keyboardType: TextInputType.phone,
+            initialCountryCode: 'BD',
+            onChanged: (full, dialCode) {
+              _phoneCountryCode = dialCode;
+              _phoneFull = full;
+            },
           ),
           const SizedBox(height: 16),
           LabeledTextField(
@@ -266,7 +271,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     final ctrl = context.read<AuthController>();
                     final name = _nameCtrl.text.trim();
                     final email = _emailCtrl.text.trim();
-                    final phone = _phoneCtrl.text.trim();
+                    final phone = _phoneFull.isNotEmpty
+                        ? _phoneFull
+                        : '$_phoneCountryCode${_phoneCtrl.text.trim()}';
                     final pass = _passCtrl.text.trim();
                     final confirm = _confirmCtrl.text.trim();
                     final ok = await ctrl.signUp(
@@ -781,6 +788,49 @@ class _OtpKeypad extends StatelessWidget {
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+class _PhoneNumberField extends StatelessWidget {
+  const _PhoneNumberField({
+    required this.controller,
+    required this.onChanged,
+    this.initialCountryCode = 'BD',
+  });
+
+  final TextEditingController controller;
+  final String initialCountryCode;
+  final void Function(String fullNumber, String dialCode) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Phone Number',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: AppColors.text,
+              ),
+        ),
+        const SizedBox(height: 8),
+        IntlPhoneField(
+          controller: controller,
+          initialCountryCode: initialCountryCode,
+          disableLengthCheck: false,
+          dropdownIconPosition: IconPosition.trailing,
+          flagsButtonPadding: const EdgeInsets.symmetric(horizontal: 8),
+          dropdownTextStyle: const TextStyle(fontSize: 14),
+          decoration: const InputDecoration(
+            hintText: 'Enter your phone number',
+          ),
+          onChanged: (phone) {
+            onChanged(phone.completeNumber, phone.countryCode);
+          },
+        ),
+      ],
     );
   }
 }

@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 // ignore: unnecessary_import
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
-import '../../features/groups/groups_feature.dart';
-import '../config/app_assets.dart';
 import '../theme/app_colors.dart';
 
 class AjoScaffold extends StatelessWidget {
@@ -82,40 +79,45 @@ class AjoBottomNav extends StatelessWidget {
               ),
               Positioned(
                 top: 0,
-                child: Builder(
-                  builder: (context) {
-                    final hasGroups = context
-                        .select<GroupsController, bool>(
-                            (c) => c.activeGroups.isNotEmpty);
-                    return Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: hasGroups ? null : AppColors.primaryDark,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(22),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: hasGroups
-                          ? ClipOval(
-                              child: Image.asset(
-                                AppAssets.wheelSpinner,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.group_outlined,
-                              color: Colors.white,
-                              size: 28,
+                child: GestureDetector(
+                  onTap: () => context.go('/wheel'),
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.primaryDark,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(22),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.warning,
+                              width: 1.5,
                             ),
-                    );
-                  },
+                          ),
+                        ),
+                        const Icon(
+                          Icons.donut_large_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

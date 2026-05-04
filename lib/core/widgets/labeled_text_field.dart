@@ -13,6 +13,7 @@ class LabeledTextField extends StatelessWidget {
     this.maxLines = 1,
     this.suffixIcon,
     this.readOnly = false,
+    this.onTap,
   });
 
   final String label;
@@ -23,6 +24,7 @@ class LabeledTextField extends StatelessWidget {
   final int maxLines;
   final Widget? suffixIcon;
   final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +45,7 @@ class LabeledTextField extends StatelessWidget {
           keyboardType: keyboardType,
           maxLines: maxLines,
           readOnly: readOnly,
+          onTap: onTap,
           decoration: InputDecoration(
             hintText: hintText,
             suffixIcon: suffixIcon,

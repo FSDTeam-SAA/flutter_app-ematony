@@ -90,10 +90,29 @@ class KycPersonalInfoScreen extends StatefulWidget {
 class _KycPersonalInfoScreenState extends State<KycPersonalInfoScreen> {
   late final TextEditingController _nameCtrl;
   final _dobCtrl = TextEditingController();
+  DateTime? _dob;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
   final _addressCtrl = TextEditingController();
   bool _isSaving = false;
+
+  Future<void> _pickDob() async {
+    final now = DateTime.now();
+    final initial = _dob ?? DateTime(now.year - 20, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: now,
+      helpText: 'Select Date of Birth',
+    );
+    if (picked == null) return;
+    setState(() {
+      _dob = picked;
+      _dobCtrl.text =
+          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+    });
+  }
 
   @override
   void initState() {
@@ -128,8 +147,10 @@ class _KycPersonalInfoScreenState extends State<KycPersonalInfoScreen> {
         LabeledTextField(
           label: 'Date of Birth',
           controller: _dobCtrl,
-          hintText: 'DD / MM / YYYY',
-          keyboardType: TextInputType.datetime,
+          hintText: 'DD/MM/YYYY',
+          readOnly: true,
+          onTap: _pickDob,
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.mutedText),
         ),
         const SizedBox(height: 16),
         LabeledTextField(
@@ -137,6 +158,7 @@ class _KycPersonalInfoScreenState extends State<KycPersonalInfoScreen> {
           controller: _emailCtrl,
           hintText: 'Enter your email address',
           keyboardType: TextInputType.emailAddress,
+          readOnly: true,
         ),
         const SizedBox(height: 16),
         LabeledTextField(
@@ -144,6 +166,7 @@ class _KycPersonalInfoScreenState extends State<KycPersonalInfoScreen> {
           controller: _phoneCtrl,
           hintText: 'Enter your phone number',
           keyboardType: TextInputType.phone,
+          readOnly: true,
         ),
         const SizedBox(height: 16),
         LabeledTextField(
@@ -341,9 +364,23 @@ class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
       }
     } catch (error) {
       if (!mounted) return;
+      final message = _extractDioMessage(error);
+      final status = error is DioException ? error.response?.statusCode : null;
+      final isUserMissing = status == 401 ||
+          status == 404 ||
+          message.toLowerCase().contains('user not found');
+
+      if (isUserMissing) {
+        _showKycMessage(context, 'Session expired. Please sign in again.', error: true);
+        await context.read<AuthController>().logout();
+        if (!mounted) return;
+        context.go('/login');
+        return;
+      }
+
       _showKycMessage(
         context,
-        '${_extractDioMessage(error)}. You can continue with the demo flow if the backend is unavailable.',
+        '$message. You can continue with the demo flow if the backend is unavailable.',
         error: true,
       );
     } finally {
@@ -917,14 +954,18 @@ class _KycScaffold extends StatelessWidget {
       body: Column(
         children: [
           Container(
-            color: AppColors.primaryDark,
+            decoration: const BoxDecoration(
+              color: AppColors.primaryDark,
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+            ),
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 10,
-              bottom: 18,
-              left: 12,
-              right: 12,
+              top: MediaQuery.of(context).padding.top + 12,
+              bottom: 24,
+              left: 8,
+              right: 8,
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 if (showBack)
                   IconButton(
@@ -936,7 +977,6 @@ class _KycScaffold extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,

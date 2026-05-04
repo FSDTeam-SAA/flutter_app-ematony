@@ -39,14 +39,18 @@ class AppRouter {
         final isVerified = authController.isKycVerified;
 
         if (!isAuthenticated && !isPublic) return '/login';
-        if (isAuthenticated && !isVerified && !isKycRoute && loc != '/splash') {
-          return '/kyc';
+        if (isAuthenticated &&
+            !isVerified &&
+            !isKycRoute &&
+            loc != '/onboarding' &&
+            loc != '/splash') {
+          return '/onboarding';
         }
         if (isAuthenticated && isVerified && (loc == '/login' || loc == '/signup' || loc == '/onboarding')) {
           return '/home';
         }
-        if (isAuthenticated && !isVerified && (loc == '/login' || loc == '/signup' || loc == '/onboarding')) {
-          return '/kyc';
+        if (isAuthenticated && !isVerified && (loc == '/login' || loc == '/signup')) {
+          return '/onboarding';
         }
         return null;
       },

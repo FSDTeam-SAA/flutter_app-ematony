@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/config/app_assets.dart';
 import '../../core/theme/app_colors.dart';
+import '../auth/auth_controller.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -217,6 +219,8 @@ class _LastPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAuthenticated = context.watch<AuthController>().isAuthenticated;
+
     return Column(
       children: [
         // ── Hero image ──
@@ -282,63 +286,94 @@ class _LastPage extends StatelessWidget {
                       _Dots(current: currentPage, onDark: true),
                       const SizedBox(height: 20),
 
-                      // Get Started
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: FilledButton(
-                          onPressed: () => context.go('/signup'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF1F7867),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Get Started',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                      if (isAuthenticated)
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: FilledButton(
+                            onPressed: () => context.go('/kyc/personal-info'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF1F7867),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
                               ),
-                              SizedBox(width: 10),
-                              Icon(Icons.arrow_forward_rounded,
-                                  size: 20, color: Colors.white),
-                            ],
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Continue',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Icon(Icons.arrow_forward_rounded,
+                                    size: 20, color: Colors.white),
+                              ],
+                            ),
+                          ),
+                        )
+                      else ...[
+                        // Get Started
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: FilledButton(
+                            onPressed: () => context.go('/signup'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF1F7867),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Get Started',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Icon(Icons.arrow_forward_rounded,
+                                    size: 20, color: Colors.white),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                      // Log in
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: OutlinedButton(
-                          onPressed: () => context.go('/login'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: BorderSide(
-                                color: Colors.white.withAlpha(100)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                        // Log in
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton(
+                            onPressed: () => context.go('/login'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(
+                                  color: Colors.white.withAlpha(100)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
-                          ),
-                          child: const Text(
-                            'Log in',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
+                            child: const Text(
+                              'Log in',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
