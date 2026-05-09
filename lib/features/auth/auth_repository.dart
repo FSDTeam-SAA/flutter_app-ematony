@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 
-import '../../core/mock/app_mock_data.dart';
 import '../../core/network/api_client.dart';
 import '../../core/storage/session_storage.dart';
 import 'auth_models.dart';
@@ -57,26 +56,6 @@ class AuthRepository {
       );
       return session;
     } on DioException catch (e) {
-      // Fallback to mock when backend is unreachable
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        await AppMockData.simulateDelay();
-        final userJson = AppMockData.loginUser(
-          email: email.isEmpty ? 'member@ajofamily.app' : email,
-          verified: true,
-        );
-        final session = AuthSession(
-          accessToken: 'mock-access-token',
-          refreshToken: 'mock-refresh-token',
-          user: AppUser.fromJson(userJson),
-        );
-        await _sessionStorage.saveSession(
-          accessToken: session.accessToken,
-          refreshToken: session.refreshToken,
-          user: session.user.toJson(),
-        );
-        return session;
-      }
       throw Exception(_extractErrorMessage(e));
     }
   }
@@ -101,7 +80,6 @@ class AuthRepository {
       );
 
       final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      // Register returns the user object directly with accessToken embedded
       final accessToken = (data['accessToken'] ?? '').toString();
       final refreshToken = (data['refreshToken'] ?? '').toString();
       final user = AppUser(
@@ -124,27 +102,6 @@ class AuthRepository {
       );
       return session;
     } on DioException catch (e) {
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        await AppMockData.simulateDelay();
-        final userJson = AppMockData.loginUser(
-          email: email,
-          name: name,
-          phone: phone,
-          verified: false,
-        );
-        final session = AuthSession(
-          accessToken: 'mock-access-token',
-          refreshToken: 'mock-refresh-token',
-          user: AppUser.fromJson(userJson),
-        );
-        await _sessionStorage.saveSession(
-          accessToken: session.accessToken,
-          refreshToken: session.refreshToken,
-          user: session.user.toJson(),
-        );
-        return session;
-      }
       throw Exception(_extractErrorMessage(e));
     }
   }
@@ -154,11 +111,18 @@ class AuthRepository {
       await _apiClient.dio
           .post('/auth/forgot-password', data: {'email': email});
     } on DioException catch (e) {
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        await AppMockData.simulateDelay();
-        return;
-      }
+      throw Exception(_extractErrorMessage(e));
+    }
+  }
+
+  Future<void> verifyOtp({
+    required String email,
+    required String otp,
+  }) async {
+    try {
+      await _apiClient.dio
+          .post('/auth/verify-otp', data: {'email': email, 'otp': otp});
+    } on DioException catch (e) {
       throw Exception(_extractErrorMessage(e));
     }
   }
@@ -174,11 +138,6 @@ class AuthRepository {
         data: {'email': email, 'otp': otp, 'password': password},
       );
     } on DioException catch (e) {
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        await AppMockData.simulateDelay();
-        return;
-      }
       throw Exception(_extractErrorMessage(e));
     }
   }
@@ -187,9 +146,9 @@ class AuthRepository {
     final token = await _sessionStorage.readAccessToken();
     final userJson = await _sessionStorage.readUser();
     if (token == null || userJson == null) return null;
-    // Refresh from server when possible
     try {
-      final response = await _apiClient.dio.get<Map<String, dynamic>>('/auth/me');
+      final response =
+          await _apiClient.dio.get<Map<String, dynamic>>('/auth/me');
       final data = response.data?['data'] as Map<String, dynamic>?;
       if (data != null) {
         final user = AppUser.fromJson(data);
@@ -212,7 +171,6 @@ class AuthRepository {
   }
 
   Future<void> updateUser(AppUser user) async {
-    AppMockData.setCurrentUser(user.toJson());
     await _sessionStorage.saveUser(user.toJson());
   }
 }

@@ -16,6 +16,7 @@ import '../features/profile/profile_controller.dart';
 import '../features/profile/profile_repository.dart';
 import '../features/wallet/wallet_controller.dart';
 import '../features/wallet/wallet_repository.dart';
+import '../features/wheel/wheel_controller.dart';
 import 'router.dart';
 
 class EmatonyApp extends StatelessWidget {
@@ -63,6 +64,10 @@ class EmatonyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (ctx) =>
               GroupsController(repository: ctx.read<GroupsRepository>()),
+        ),
+        ChangeNotifierProvider(
+          create: (ctx) =>
+              WheelController(repository: ctx.read<GroupsRepository>()),
         ),
 
         // ── Wallet ──

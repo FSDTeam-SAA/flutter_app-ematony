@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           const BrandHeader(
             title: 'Welcome Back',
-            subtitle: 'Sign in to your account',
+            subtitle: 'Sign in to continue Ajo Family',
           ),
           const SizedBox(height: 32),
           LabeledTextField(

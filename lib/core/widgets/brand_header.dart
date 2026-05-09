@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/app_assets.dart';
 import '../theme/app_colors.dart';
 
 class BrandHeader extends StatelessWidget {
@@ -15,41 +16,24 @@ class BrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 92,
-          height: 92,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            border: Border.all(color: const Color(0xFFF4D181), width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(10),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            'ajo',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primaryDark,
-                ),
-          ),
+        Image.asset(
+          AppAssets.logoFlat,
+          height: 140,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
         ),
         const SizedBox(height: 16),
         Text(
           title,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppColors.text,
               ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(

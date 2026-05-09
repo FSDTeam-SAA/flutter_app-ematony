@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import '../../core/mock/app_mock_data.dart';
 import '../../core/network/api_client.dart';
 import '../auth/auth_models.dart';
 
@@ -77,11 +76,6 @@ class ProfileRepository {
         } catch (_) {}
         return null;
       }();
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        await AppMockData.simulateDelay();
-        return;
-      }
       throw Exception(msg ?? 'Failed to change password.');
     }
   }

@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,8 +29,22 @@ String _extractDioMessage(Object error) {
     if (data is Map<String, dynamic>) {
       return (data['message'] ?? data['error'] ?? 'Request failed').toString();
     }
+    switch (error.type) {
+      case DioExceptionType.connectionError:
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return 'Cannot reach the server. Check your connection or try again.';
+      case DioExceptionType.badCertificate:
+        return 'Secure connection failed. Please try again.';
+      case DioExceptionType.cancel:
+        return 'Request cancelled.';
+      case DioExceptionType.badResponse:
+      case DioExceptionType.unknown:
+        return error.message ?? 'Request failed';
+    }
   }
-  return error.toString();
+  return 'Something went wrong. Please try again.';
 }
 
 class IdentityVerificationScreen extends StatelessWidget {
@@ -378,9 +393,10 @@ class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
         return;
       }
 
+      final clean = message.endsWith('.') ? message.substring(0, message.length - 1) : message;
       _showKycMessage(
         context,
-        '$message. You can continue with the demo flow if the backend is unavailable.',
+        '$clean. Tap "Use Demo Verification Flow" to continue offline.',
         error: true,
       );
     } finally {
@@ -953,7 +969,13 @@ class _KycScaffold extends StatelessWidget {
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          Container(
+          AnnotatedRegion<SystemUiOverlayStyle>(
+            value: const SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              statusBarBrightness: Brightness.dark,
+            ),
+            child: Container(
             decoration: const BoxDecoration(
               color: AppColors.primaryDark,
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
@@ -985,6 +1007,7 @@ class _KycScaffold extends StatelessWidget {
                 ),
                 const SizedBox(width: 48),
               ],
+            ),
             ),
           ),
           Expanded(

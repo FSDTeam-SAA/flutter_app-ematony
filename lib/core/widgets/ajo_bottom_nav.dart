@@ -33,25 +33,6 @@ class AjoBottomNav extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.bottomCenter,
         children: [
-          // "Next payout" indicator above the nav bar
-          Positioned(
-            bottom: 104 + bottomInset,
-            child: Column(
-              children: [
-                const Text(
-                  'Next payout (23/03)',
-                  style: TextStyle(
-                    color: AppColors.primaryDark,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Icon(Icons.arrow_drop_down, color: AppColors.primaryDark, size: 20),
-              ],
-            ),
-          ),
-
           // Main Navigation Bar Container
           Positioned(
             left: 16,
@@ -174,11 +155,15 @@ class _SpinActionButton extends StatelessWidget {
             children: [
               // Member collage background (placeholder with image)
               ClipOval(
-                child: Image.asset(
-                  AppAssets.spinIcon2,
-                  fit: BoxFit.cover,
+                child: Container(
                   width: double.infinity,
                   height: double.infinity,
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(10),
+                  child: Image.asset(
+                    AppAssets.logoFlat,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
               // "Spin" text in center

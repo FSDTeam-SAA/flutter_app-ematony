@@ -2,202 +2,415 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/ajo_chrome.dart';
+import 'wheel_controller.dart';
 
-class WheelScreen extends StatelessWidget {
+class WheelScreen extends StatefulWidget {
   const WheelScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Until real group members exist, render placeholder slots.
-    const List<String> members = <String>[];
-    const slotCount = 8;
+  State<WheelScreen> createState() => _WheelScreenState();
+}
 
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 110),
-        child: Column(
+class _WheelScreenState extends State<WheelScreen> {
+  bool _bootstrapped = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_bootstrapped) {
+      _bootstrapped = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<WheelController>().loadGroups();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<WheelController>(
+      builder: (context, controller, _) {
+        return SafeArea(
+          top: false,
+          child: RefreshIndicator(
+            onRefresh: () => controller.loadGroups(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 110),
+              child: _buildBody(context, controller),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, WheelController controller) {
+    final selected = controller.selectedGroup;
+    return Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
           children: [
-              Stack(
-                clipBehavior: Clip.none,
+            AjoPatternHeader(
+              bottomRadius: 28,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AjoPatternHeader(
-                    bottomRadius: 28,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 28),
-                        Text(
-                          'Select Group',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Select Group',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.white.withAlpha(80)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white),
-                                ),
-                                child: const Icon(
-                                  Icons.blur_circular_outlined,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Friends With Benefits - 2026',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ),
-                              const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: -56,
-                    child: AjoCard(
-                      color: AppColors.primaryDark,
-                      radius: 22,
-                      borderColor: const Color(0xFF8DA398),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(18),
-                          blurRadius: 14,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                      child: Column(
-                        children: [
-                          Text(
-                            'Current Savings Pool',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '\u20A61000.00',
-                            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          const SizedBox(height: 18),
-                          Row(
-                            children: const [
-                              Expanded(
-                                child: _PoolMeta(label: 'Next Wheel', value: 'April -27'),
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: _PoolMeta(label: 'Members', value: '08'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 12),
+                  _GroupDropdown(controller: controller),
+                  const SizedBox(height: 90),
                 ],
               ),
-              const SizedBox(height: 88),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: -56,
+              child: AjoCard(
+                color: AppColors.primaryDark,
+                radius: 22,
+                borderColor: const Color(0xFF8DA398),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
                 child: Column(
                   children: [
                     Text(
-                      'Next payout (23/03)',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                      'Current Savings Pool',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
                           ),
                     ),
-                    const SizedBox(height: 4),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      color: AppColors.primaryDark,
-                    ),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () => context.push('/wheel/winner?name=Ematony&amount=%E2%82%A612000'),
-                      child: _WheelDisc(
-                        names: members,
-                        slotCount: slotCount,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'All Members',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (members.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Text(
-                          'No members yet. Invite people to fill the wheel.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: AppColors.mutedText,
+                    const SizedBox(height: 10),
+                    Text(
+                      selected != null
+                          ? controller.formattedSavingsPool()
+                          : '₦0.00',
+                      style:
+                          Theme.of(context).textTheme.displaySmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
                               ),
-                        ),
-                      )
-                    else
-                      ...List.generate(
-                        members.length,
-                        (index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _WheelMemberRow(
-                            index: index + 1,
-                            name: members[index],
-                            winner: index == 0,
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PoolMeta(
+                            label: 'Next Wheel',
+                            value: _nextWheelLabel(controller),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _PoolMeta(
+                            label: 'Members',
+                            value: controller.totalMembers
+                                .toString()
+                                .padLeft(2, '0'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 88),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              Text(
+                'Next payout (${_nextPayoutShort(controller)})',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              const Icon(
+                Icons.arrow_drop_down,
+                color: AppColors.primaryDark,
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => _onWheelTap(context, controller),
+                child: _WheelDisc(
+                  rotations: controller.rotations,
+                  slotCount: selected?.maxMembers.clamp(3, 10) ?? 8,
+                ),
+              ),
+              const SizedBox(height: 24),
+              if (controller.isLoadingWheel)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'All Members',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (controller.isLoadingGroups && controller.groups.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (controller.groups.isEmpty)
+                _emptyState(
+                  context,
+                  controller.error ??
+                      'No groups yet. Create or join a group to start spinning.',
+                )
+              else if (controller.rotations.isEmpty)
+                _emptyState(
+                  context,
+                  'No members yet. Invite people to fill the wheel.',
+                )
+              else
+                ...List.generate(controller.rotations.length, (index) {
+                  final item = controller.rotations[index];
+                  final isWinner =
+                      controller.lastWinner?.userId == item.userId &&
+                          item.userId.isNotEmpty;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _WheelMemberRow(
+                      index: item.positionNumber > 0
+                          ? item.positionNumber
+                          : index + 1,
+                      name: item.name,
+                      avatarUrl: item.avatarUrl,
+                      winner: isWinner,
+                    ),
+                  );
+                }),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onWheelTap(BuildContext context, WheelController controller) async {
+    if (controller.canSpin) {
+      final result = await controller.spin();
+      if (!context.mounted) return;
+      if (result != null) {
+        final winnerName = (result['winnerUser'] is Map)
+            ? ((result['winnerUser'] as Map)['name']?.toString() ?? 'Winner')
+            : 'Winner';
+        final amount = (result['amount'] as num?)?.toString() ?? '0';
+        context.push(
+          '/wheel/winner?name=${Uri.encodeComponent(winnerName)}&amount=${Uri.encodeComponent('₦$amount')}',
+        );
+      } else if (controller.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(controller.error!)),
+        );
+      }
+    } else if (controller.lastWinner != null) {
+      final name = controller.lastWinner!.name;
+      final amount = controller.formattedSavingsPool();
+      context.push(
+        '/wheel/winner?name=${Uri.encodeComponent(name)}&amount=${Uri.encodeComponent(amount)}',
+      );
+    } else if (controller.spinWindow['startDay'] != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Wheel can be spun between day ${controller.spinWindow['startDay']} and ${controller.spinWindow['endDay']}.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _emptyState(BuildContext context, String message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.mutedText,
+            ),
+      ),
+    );
+  }
+
+  String _nextWheelLabel(WheelController controller) {
+    final startDay = (controller.spinWindow['startDay'] as num?)?.toInt() ?? 25;
+    final today = (controller.spinWindow['today'] as num?)?.toInt() ??
+        DateTime.now().day;
+    final now = DateTime.now();
+    final useNextMonth = today > startDay;
+    final target = useNextMonth
+        ? DateTime(now.year, now.month + 1, startDay)
+        : DateTime(now.year, now.month, startDay);
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${months[target.month - 1]} -${target.day}';
+  }
+
+  String _nextPayoutShort(WheelController controller) {
+    final endDay = (controller.spinWindow['endDay'] as num?)?.toInt() ?? 30;
+    final today = (controller.spinWindow['today'] as num?)?.toInt() ??
+        DateTime.now().day;
+    final now = DateTime.now();
+    final target = today > endDay
+        ? DateTime(now.year, now.month + 1, endDay)
+        : DateTime(now.year, now.month, endDay);
+    final dd = target.day.toString().padLeft(2, '0');
+    final mm = target.month.toString().padLeft(2, '0');
+    return '$dd/$mm';
+  }
+}
+
+class _GroupDropdown extends StatelessWidget {
+  const _GroupDropdown({required this.controller});
+
+  final WheelController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = controller.selectedGroup;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: controller.groups.isEmpty
+          ? null
+          : () => _openPicker(context, controller),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withAlpha(80)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white),
+              ),
+              child: const Icon(
+                Icons.blur_circular_outlined,
+                size: 16,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                selected?.name ??
+                    (controller.isLoadingGroups
+                        ? 'Loading groups…'
+                        : 'No groups available'),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  void _openPicker(BuildContext context, WheelController controller) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'Select Group',
+                    style: Theme.of(sheetContext)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...controller.groups.map(
+                  (g) => ListTile(
+                    leading: const Icon(
+                      Icons.blur_circular_outlined,
+                      color: AppColors.primaryDark,
+                    ),
+                    title: Text(g.name),
+                    trailing: controller.selectedGroup?.id == g.id
+                        ? const Icon(Icons.check, color: AppColors.primaryDark)
+                        : null,
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      controller.selectGroup(g);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -351,16 +564,16 @@ class _PoolMeta extends StatelessWidget {
 
 class _WheelDisc extends StatelessWidget {
   const _WheelDisc({
-    required this.names,
+    required this.rotations,
     this.slotCount = 8,
   });
 
-  final List<String> names;
+  final List<WheelRotationItem> rotations;
   final int slotCount;
 
   @override
   Widget build(BuildContext context) {
-    final count = names.isEmpty ? slotCount : names.length;
+    final count = rotations.isEmpty ? slotCount : rotations.length;
     return SizedBox(
       width: 330,
       height: 330,
@@ -380,10 +593,18 @@ class _WheelDisc extends StatelessWidget {
           ),
           for (var i = 0; i < count; i++)
             Positioned(
-              left: 165 + 120 * math.cos((2 * math.pi * i / count) - math.pi / 2) - 28,
-              top: 165 + 120 * math.sin((2 * math.pi * i / count) - math.pi / 2) - 28,
-              child: i < names.length
-                  ? AjoAvatar(name: names[i], radius: 28)
+              left: 165 +
+                  120 * math.cos((2 * math.pi * i / count) - math.pi / 2) -
+                  28,
+              top: 165 +
+                  120 * math.sin((2 * math.pi * i / count) - math.pi / 2) -
+                  28,
+              child: i < rotations.length
+                  ? AjoAvatar(
+                      name: rotations[i].name,
+                      avatarUrl: rotations[i].avatarUrl,
+                      radius: 28,
+                    )
                   : const _WheelSlotPlaceholder(),
             ),
           Container(
@@ -436,11 +657,13 @@ class _WheelMemberRow extends StatelessWidget {
   const _WheelMemberRow({
     required this.index,
     required this.name,
+    required this.avatarUrl,
     required this.winner,
   });
 
   final int index;
   final String name;
+  final String? avatarUrl;
   final bool winner;
 
   @override
@@ -471,7 +694,7 @@ class _WheelMemberRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          AjoAvatar(name: name, radius: 14),
+          AjoAvatar(name: name, avatarUrl: avatarUrl, radius: 14),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -486,7 +709,9 @@ class _WheelMemberRow extends StatelessWidget {
           Row(
             children: [
               Icon(
-                winner ? Icons.workspace_premium_outlined : Icons.timelapse_outlined,
+                winner
+                    ? Icons.workspace_premium_outlined
+                    : Icons.timelapse_outlined,
                 color: const Color(0xFFF4AF21),
                 size: 18,
               ),
@@ -494,7 +719,9 @@ class _WheelMemberRow extends StatelessWidget {
               Text(
                 winner ? 'Last Winner' : 'Pending',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: winner ? const Color(0xFFF6F6D5) : const Color(0xFFF4AF21),
+                      color: winner
+                          ? const Color(0xFFF6F6D5)
+                          : const Color(0xFFF4AF21),
                     ),
               ),
             ],

@@ -5,7 +5,6 @@ import '../../core/models/notification_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/ajo_chrome.dart';
 import 'notifications_controller.dart';
-import 'notifications_repository.dart';
 
 // ─── NotificationsScreen ──────────────────────────────────────────────────────
 

@@ -16,6 +16,10 @@ class ApiClient {
             headers: const {'Content-Type': 'application/json'},
           ),
         ) {
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print('[ApiClient] baseUrl = ${AppConfig.apiBaseUrl}');
+    }
     // ── Auth token interceptor (attaches Bearer token to every request) ──
     dio.interceptors.add(
       InterceptorsWrapper(
