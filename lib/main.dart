@@ -6,10 +6,24 @@ import 'core/config/stripe_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Stripe.publishableKey = StripeConfig.publishableKey;
-  if (StripeConfig.merchantIdentifier.isNotEmpty) {
-    Stripe.merchantIdentifier = StripeConfig.merchantIdentifier;
-  }
-  await Stripe.instance.applySettings();
   runApp(const EmatonyApp());
+
+  try {
+    Stripe.publishableKey = StripeConfig.publishableKey;
+    if (StripeConfig.merchantIdentifier.isNotEmpty) {
+      Stripe.merchantIdentifier = StripeConfig.merchantIdentifier;
+    }
+    await Stripe.instance
+        .applySettings()
+        .timeout(const Duration(seconds: 5));
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'main',
+        context: ErrorDescription('while applying Stripe settings'),
+      ),
+    );
+  }
 }

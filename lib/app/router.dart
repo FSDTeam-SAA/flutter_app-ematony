@@ -55,6 +55,12 @@ class AppRouter {
         final isAuthenticated = authController.isAuthenticated;
         final isVerified = authController.isKycVerified;
 
+        // Leave the splash route as soon as bootstrap completes.
+        if (loc == '/splash') {
+          if (!isAuthenticated) return '/login';
+          return isVerified ? '/home' : '/onboarding';
+        }
+
         // ── Rule 1: Not logged in — send to login (except public routes) ──
         if (!isAuthenticated && !isPublic && !isKycRoute) {
           return '/login';
