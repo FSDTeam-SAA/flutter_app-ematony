@@ -14,8 +14,10 @@ import '../../core/widgets/labeled_text_field.dart';
 import '../../core/widgets/primary_button.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
+import 'profile_controller.dart';
+import 'profile_repository.dart';
 
-// ─── Repository ───────────────────────────────────────────────────────────────
+// ─── ProfileScreen ────────────────────────────────────────────────────────────
 
 class ProfileRepository {
   ProfileRepository({required ApiClient apiClient}) : _apiClient = apiClient;

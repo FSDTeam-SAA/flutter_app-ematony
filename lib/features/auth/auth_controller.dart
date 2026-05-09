@@ -17,17 +17,26 @@ class AuthController extends ChangeNotifier {
   bool get isAuthenticated => currentUser != null;
   bool get isKycVerified => currentUser?.kycVerified ?? false;
 
-  /// Called once at app start. Restores session from local storage,
-  /// then refreshes the user profile from the server if reachable.
+  /// Called once at app start. Restores session and ensures a minimum
+  /// splash duration for a professional, smooth experience.
   Future<void> bootstrap() async {
+    final startTime = DateTime.now();
+    
     try {
       currentUser = await _repository.restoreUser();
     } catch (_) {
       currentUser = null;
-    } finally {
-      isReady = true;
-      notifyListeners();
     }
+
+    // Ensure splash stays visible for at least 2 seconds for branding
+    final elapsed = DateTime.now().difference(startTime).inMilliseconds;
+    const minDelay = 2000;
+    if (elapsed < minDelay) {
+      await Future.delayed(Duration(milliseconds: minDelay - elapsed));
+    }
+
+    isReady = true;
+    notifyListeners();
   }
 
   Future<bool> login({
@@ -106,9 +115,11 @@ class AuthController extends ChangeNotifier {
   // ── Private helpers ──────────────────────────────────────────────────────
 
   Future<bool> _runGuarded(Future<void> Function() task) async {
+    if (isBusy) return false;
+    
     isBusy = true;
     errorMessage = null;
-    notifyListeners();
+    notifyListeners(); // Notify router that we are busy (optional, but good for UI)
 
     try {
       await task();

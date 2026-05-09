@@ -1,66 +1,91 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../core/widgets/ajo_chrome.dart';
 import '../features/auth/auth_controller.dart';
-import '../features/auth/auth_screens.dart';
-import '../features/groups/groups_feature.dart';
-import '../features/home/home_feature.dart';
-import '../features/kyc/kyc_feature.dart';
+import '../features/auth/screens/forgot_password_screens.dart';
+import '../features/auth/screens/login_screen.dart';
+import '../features/auth/screens/signup_screen.dart';
+import '../features/groups/groups_repository.dart';
+import '../features/groups/groups_screen.dart';
+import '../features/home/home_screen.dart';
+import '../features/kyc/kyc_screens.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/splash/splash_screen.dart';
-import '../features/wallet/wallet_feature.dart';
+import '../features/wallet/wallet_screen.dart';
 import '../features/wheel/wheel_feature.dart';
 
 class AppRouter {
   static GoRouter create(AuthController authController) {
+    // ── Performance Optimization ──
+    // The router should only refresh when auth state changes (logged in/out/ready),
+    // NOT when the loading state (isBusy) changes. 
+    // This prevents unnecessary re-evaluations and "flashing" during auth flows.
+    final routerListenable = _AuthRouterListenable(authController);
+
     return GoRouter(
       initialLocation: '/splash',
-      refreshListenable: authController,
+      refreshListenable: routerListenable,
       redirect: (context, state) {
+        // ── Wait for bootstrap to finish ──
         if (!authController.isReady) return null;
 
-        const publicRoutes = {
+        final loc = state.matchedLocation;
+
+        // Routes that are always accessible (no auth required)
+        const alwaysPublic = {
           '/splash',
           '/onboarding',
           '/login',
           '/signup',
           '/forgot-password',
-          '/verify-otp',
-          '/new-password',
-          '/reset-password',
         };
+        // Routes accessible mid-password-reset flow (public but path-prefixed)
+        final isPasswordResetRoute =
+            loc.startsWith('/verify-otp') ||
+            loc.startsWith('/reset-password') ||
+            loc.startsWith('/new-password');
 
-        final loc = state.matchedLocation;
-        final isPublic = publicRoutes.any((r) => loc.startsWith(r));
-        final isAuthenticated = authController.isAuthenticated;
+        final isPublic =
+            alwaysPublic.any((r) => loc.startsWith(r)) || isPasswordResetRoute;
         final isKycRoute = loc.startsWith('/kyc');
+        final isAuthenticated = authController.isAuthenticated;
         final isVerified = authController.isKycVerified;
 
-        if (!isAuthenticated && !isPublic) return '/login';
-        if (isAuthenticated &&
-            !isVerified &&
-            !isKycRoute &&
-            loc != '/onboarding' &&
-            loc != '/splash') {
-          return '/onboarding';
+        // ── Rule 1: Not logged in — send to login (except public routes) ──
+        if (!isAuthenticated && !isPublic && !isKycRoute) {
+          return '/login';
         }
-        if (isAuthenticated &&
-            isVerified &&
-            (loc == '/login' || loc == '/signup' || loc == '/onboarding')) {
-          return '/home';
+
+        // ── Rule 2: Logged in but not KYC verified ──
+        if (isAuthenticated && !isVerified) {
+          // Allow KYC routes and onboarding
+          if (isKycRoute || loc == '/onboarding' || loc == '/splash') {
+            return null;
+          }
+          // Block everything else — push to onboarding where they'll be told to verify
+          if (!isPublic) return '/onboarding';
         }
-        if (isAuthenticated &&
-            !isVerified &&
-            (loc == '/login' || loc == '/signup')) {
-          return '/onboarding';
+
+        // ── Rule 3: Logged in AND verified — redirect away from auth pages ──
+        if (isAuthenticated && isVerified) {
+          if (loc == '/login' ||
+              loc == '/signup' ||
+              loc == '/onboarding' ||
+              loc == '/splash') {
+            return '/home';
+          }
         }
+
         return null;
       },
       routes: [
-        // ── Public ──
+        // ─────────────────────────────────────────────────────────────────
+        // Public routes
+        // ─────────────────────────────────────────────────────────────────
         GoRoute(
           path: '/splash',
           builder: (_, _) => const SplashScreen(),
@@ -94,14 +119,10 @@ class AppRouter {
             prefilledOtp: state.uri.queryParameters['otp'],
           ),
         ),
-        GoRoute(
-          path: '/reset-password',
-          builder: (context, state) => OtpVerificationScreen(
-            prefilledEmail: state.uri.queryParameters['email'],
-          ),
-        ),
 
-        // ── KYC ──
+        // ─────────────────────────────────────────────────────────────────
+        // KYC (requires login, does NOT require prior KYC completion)
+        // ─────────────────────────────────────────────────────────────────
         GoRoute(
           path: '/kyc',
           builder: (_, _) => const IdentityVerificationScreen(),
@@ -151,7 +172,9 @@ class AppRouter {
           builder: (_, _) => const KycVerifiedScreen(),
         ),
 
-        // ── Main Tabs (persistent shell with animated transitions) ──
+        // ─────────────────────────────────────────────────────────────────
+        // Main tabs — persistent shell (requires auth + KYC)
+        // ─────────────────────────────────────────────────────────────────
         StatefulShellRoute(
           navigatorContainerBuilder: (context, navigationShell, children) =>
               AnimatedBranchContainer(
@@ -204,11 +227,27 @@ class AppRouter {
           ],
         ),
 
-        // ── Sub-routes (outside shell — no nav bar) ──
+        // ─────────────────────────────────────────────────────────────────
+        // Sub-screens (no bottom nav bar, require auth)
+        // ─────────────────────────────────────────────────────────────────
         GoRoute(
           path: '/notifications',
           builder: (_, _) => const NotificationsScreen(),
         ),
+        GoRoute(
+          path: '/transactions',
+          builder: (_, _) => const TransactionHistoryScreen(),
+        ),
+        GoRoute(
+          path: '/wheel/winner',
+          builder: (context, state) => WinnerCongratulationsScreen(
+            winnerName:
+                state.uri.queryParameters['name'] ?? 'Ajo Family Member',
+            amount: state.uri.queryParameters['amount'] ?? '₦25,000',
+          ),
+        ),
+
+        // ── Groups sub-screens ──
         GoRoute(
           path: '/groups/create',
           builder: (_, _) => const CreateGroupScreen(),
@@ -230,18 +269,8 @@ class AppRouter {
             ),
           ),
         ),
-        GoRoute(
-          path: '/transactions',
-          builder: (_, _) => const TransactionHistoryScreen(),
-        ),
-        GoRoute(
-          path: '/wheel/winner',
-          builder: (context, state) => WinnerCongratulationsScreen(
-            winnerName:
-                state.uri.queryParameters['name'] ?? 'Ajo Family Member',
-            amount: state.uri.queryParameters['amount'] ?? '₦25,000',
-          ),
-        ),
+
+        // ── Profile sub-screens ──
         GoRoute(
           path: '/profile/personal-info',
           builder: (_, _) => const PersonalInfoScreen(),
@@ -263,12 +292,51 @@ class AppRouter {
           builder: (_, _) => const TermsConditionsScreen(),
         ),
 
-        // ── Support (legacy contact admin) ──
+        // ── Support ──
         GoRoute(
           path: '/support/new',
           builder: (_, _) => const ContactAdminScreen(),
         ),
       ],
     );
+  }
+}
+
+/// A specialized listenable that filters [AuthController] updates.
+/// It only notifies the router when auth-relevant state changes,
+/// preventing "auto-reload" jitters when isBusy or other transient
+/// UI state changes in the controller.
+class _AuthRouterListenable extends ChangeNotifier {
+  _AuthRouterListenable(this._authController) {
+    _authController.addListener(_handleUpdate);
+    _lastIsAuthenticated = _authController.isAuthenticated;
+    _lastIsReady = _authController.isReady;
+    _lastIsVerified = _authController.isKycVerified;
+  }
+
+  final AuthController _authController;
+  late bool _lastIsAuthenticated;
+  late bool _lastIsReady;
+  late bool _lastIsVerified;
+
+  void _handleUpdate() {
+    final newIsAuthenticated = _authController.isAuthenticated;
+    final newIsReady = _authController.isReady;
+    final newIsVerified = _authController.isKycVerified;
+
+    if (newIsAuthenticated != _lastIsAuthenticated ||
+        newIsReady != _lastIsReady ||
+        newIsVerified != _lastIsVerified) {
+      _lastIsAuthenticated = newIsAuthenticated;
+      _lastIsReady = newIsReady;
+      _lastIsVerified = newIsVerified;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _authController.removeListener(_handleUpdate);
+    super.dispose();
   }
 }

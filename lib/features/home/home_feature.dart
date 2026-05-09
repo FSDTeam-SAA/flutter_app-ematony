@@ -121,18 +121,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ? homeCtrl.groups.first
         : null;
 
-    return AjoScaffold(
-      bottomNav: false,
-      body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () => context.read<HomeController>().load(),
-          color: AppColors.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 110),
-            child: Column(
-              children: [
+    return SafeArea(
+      top: false,
+      child: RefreshIndicator(
+        onRefresh: () => context.read<HomeController>().load(),
+        color: AppColors.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 110),
+          child: Column(
+            children: [
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -462,8 +460,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
-    );
+      );
+    
   }
 }
 

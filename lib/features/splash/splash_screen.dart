@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/config/app_assets.dart';
-import '../auth/auth_controller.dart';
 
+/// Shows a branded splash while [AuthController.bootstrap] completes.
+/// 
+/// IMPORTANT: This widget does NO navigation. 
+/// GoRouter's `refreshListenable` in [AppRouter] detects when 
+/// [AuthController.isReady] becomes true and performs the redirect 
+/// to /home or /onboarding automatically.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -16,39 +19,20 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeAnim;
+  late final Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
+    _scaleAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutBack),
+    );
     _animCtrl.forward();
-
-    Future<void>.delayed(const Duration(milliseconds: 1800), () {
-      if (!mounted) return;
-      _routeAfterAuth();
-    });
-  }
-
-  void _routeAfterAuth() {
-    final auth = context.read<AuthController>();
-    if (!auth.isReady) {
-      // Bootstrap still running — wait and retry
-      Future<void>.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) _routeAfterAuth();
-      });
-      return;
-    }
-    if (auth.isAuthenticated && !auth.isKycVerified) {
-      context.go('/kyc');
-    } else if (auth.isAuthenticated) {
-      context.go('/home');
-    } else {
-      context.go('/onboarding');
-    }
   }
 
   @override
@@ -63,42 +47,43 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // ── Top-right African pattern ──
+          // ── Decorative top-right pattern ──
           Positioned(
-            top: -10,
-            right: -10,
+            top: -20,
+            right: -20,
             child: Image.asset(
               AppAssets.patternTopRight,
-              width: 160,
-              height: 160,
+              width: 180,
+              height: 180,
               fit: BoxFit.contain,
+              cacheWidth: 360, // Optimize memory
             ),
           ),
-          // ── Bottom-left African pattern ──
+          // ── Decorative bottom-left pattern ──
           Positioned(
-            bottom: -10,
-            left: -10,
+            bottom: -20,
+            left: -20,
             child: Image.asset(
               AppAssets.patternBottomLeft,
-              width: 160,
-              height: 160,
+              width: 180,
+              height: 180,
               fit: BoxFit.contain,
+              cacheWidth: 360, // Optimize memory
             ),
           ),
-          // ── Centred logo ──
+          // ── Animated centered logo ──
           Center(
             child: FadeTransition(
               opacity: _fadeAnim,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset(
-                    AppAssets.logoFlat,
-                    width: 200,
-                    height: 200,
-                    fit: BoxFit.contain,
-                  ),
-                ],
+              child: ScaleTransition(
+                scale: _scaleAnim,
+                child: Image.asset(
+                  AppAssets.logoFlat,
+                  width: 220,
+                  height: 220,
+                  fit: BoxFit.contain,
+                  cacheWidth: 440, // Optimize memory
+                ),
               ),
             ),
           ),

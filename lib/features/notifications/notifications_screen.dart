@@ -1,89 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/mock/app_mock_data.dart';
 import '../../core/models/notification_model.dart';
-import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/ajo_chrome.dart';
-
-// ─── Repository ───────────────────────────────────────────────────────────────
-
-class NotificationsRepository {
-  NotificationsRepository({required ApiClient apiClient})
-      : _apiClient = apiClient;
-
-  final ApiClient _apiClient;
-
-  Future<List<NotificationModel>> fetchMyNotifications() async {
-    try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/notification');
-      final raw = response.data?['data'];
-      if (raw is List) {
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map(NotificationModel.fromJson)
-            .toList();
-      }
-      return [];
-    } catch (_) {
-      return AppMockData.notifications()
-          .map(NotificationModel.fromJson)
-          .toList();
-    }
-  }
-
-  Future<void> markAllRead() async {
-    try {
-      await _apiClient.dio.patch('/notification/read-all');
-    } catch (_) {}
-  }
-}
-
-// ─── Controller ───────────────────────────────────────────────────────────────
-
-class NotificationsController extends ChangeNotifier {
-  NotificationsController({required NotificationsRepository repository})
-      : _repository = repository;
-
-  final NotificationsRepository _repository;
-
-  bool isLoading = false;
-  List<NotificationModel> notifications = [];
-  String? error;
-
-  int get unreadCount => notifications.where((n) => !n.isRead).length;
-
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
-    try {
-      notifications = await _repository.fetchMyNotifications();
-    } catch (e) {
-      error = e.toString();
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> markAllRead() async {
-    await _repository.markAllRead();
-    notifications = notifications
-        .map((n) => NotificationModel(
-              id: n.id,
-              title: n.title,
-              content: n.content,
-              type: n.type,
-              isRead: true,
-              createdAt: n.createdAt,
-            ))
-        .toList();
-    notifyListeners();
-  }
-}
+import 'notifications_controller.dart';
+import 'notifications_repository.dart';
 
 // ─── NotificationsScreen ──────────────────────────────────────────────────────
 

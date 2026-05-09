@@ -10,246 +10,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/ajo_chrome.dart';
 import '../../core/widgets/labeled_text_field.dart';
 import '../../core/widgets/primary_button.dart';
-
-// ─── Repository ───────────────────────────────────────────────────────────────
-
-class GroupsRepository {
-  GroupsRepository({required ApiClient apiClient}) : _apiClient = apiClient;
-
-  final ApiClient _apiClient;
-
-  Future<List<GroupModel>> listMyGroups() async {
-    try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/groups');
-      final raw = response.data?['data'];
-      if (raw is List) {
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map(GroupModel.fromJson)
-            .toList();
-      }
-      return [];
-    } on DioException {
-      return AppMockData.activeGroups().map(GroupModel.fromJson).toList();
-    }
-  }
-
-  Future<List<GroupModel>> listGroupRequests() async {
-    try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/groups/requests');
-      final raw = response.data?['data'];
-      if (raw is List) {
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map((json) {
-              final groupJson = json['groupId'] as Map<String, dynamic>?;
-              if (groupJson != null) return GroupModel.fromJson(groupJson);
-              return GroupModel.fromJson(json);
-            })
-            .toList();
-      }
-      return [];
-    } on DioException {
-      return AppMockData.requestGroups().map(GroupModel.fromJson).toList();
-    }
-  }
-
-  Future<Map<String, dynamic>> getGroupDetails(String id) async {
-    try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id');
-      return response.data?['data'] as Map<String, dynamic>? ?? {};
-    } on DioException {
-      return AppMockData.groupDetail(id);
-    }
-  }
-
-  Future<List<GroupMemberModel>> getGroupMembers(String id) async {
-    try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/groups/$id/members');
-      final raw = response.data?['data'];
-      if (raw is List) {
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map(GroupMemberModel.fromJson)
-            .toList();
-      }
-      return [];
-    } on DioException {
-      return AppMockData.groupMembers(id)
-          .map(GroupMemberModel.fromJson)
-          .toList();
-    }
-  }
-
-  Future<String> createGroup({
-    required String name,
-    required double amount,
-    required String frequency,
-    required int maxMembers,
-    required bool autoPayments,
-  }) async {
-    try {
-      final response =
-          await _apiClient.dio.post<Map<String, dynamic>>('/groups', data: {
-        'name': name,
-        'contributionAmount': amount,
-        'contributionFrequency': frequency,
-        'frequency': frequency,
-        'maxMembers': maxMembers,
-      });
-      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      final group = data['group'] as Map<String, dynamic>?;
-      final inviteCode =
-          (data['inviteCode'] ?? group?['inviteCode'] ?? '').toString();
-      return inviteCode;
-    } on DioException catch (e) {
-      final msg = () {
-        try {
-          final d = e.response?.data;
-          if (d is Map) return d['message']?.toString();
-        } catch (_) {}
-        return null;
-      }();
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        final mock = AppMockData.createGroup(
-          name: name,
-          amount: amount.toString(),
-          frequency: frequency,
-          maxMembers: maxMembers.toString(),
-          cycleDuration: maxMembers.toString(),
-          autoPayments: autoPayments,
-        );
-        return '#${mock['inviteCode']}';
-      }
-      throw Exception(msg ?? 'Failed to create group.');
-    }
-  }
-
-  Future<String> joinByCode(String code) async {
-    final normalized = code.replaceAll('#', '').trim().toUpperCase();
-    try {
-      final response =
-          await _apiClient.dio.post<Map<String, dynamic>>('/groups/join-by-code',
-              data: {'inviteCode': normalized});
-      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      final groupId = (data['groupId'] ?? data['_id'] ?? '').toString();
-      return groupId;
-    } on DioException catch (e) {
-      final msg = () {
-        try {
-          final d = e.response?.data;
-          if (d is Map) return d['message']?.toString();
-        } catch (_) {}
-        return null;
-      }();
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        return AppMockData.joinByCode(normalized);
-      }
-      throw Exception(msg ?? 'Group code not found.');
-    }
-  }
-}
-
-// ─── Controller ───────────────────────────────────────────────────────────────
-
-class GroupsController extends ChangeNotifier {
-  GroupsController({required GroupsRepository repository})
-      : _repository = repository;
-
-  final GroupsRepository _repository;
-
-  bool isLoading = false;
-  bool isCreating = false;
-  bool isJoining = false;
-  List<GroupModel> activeGroups = [];
-  List<GroupModel> requestGroups = [];
-  String? error;
-  String? createdInviteCode;
-
-  Future<void> load() async {
-    isLoading = true;
-    error = null;
-    notifyListeners();
-    try {
-      final results = await Future.wait([
-        _repository.listMyGroups(),
-        _repository.listGroupRequests(),
-      ]);
-      activeGroups = results[0];
-      requestGroups = results[1];
-    } catch (e) {
-      error = e.toString();
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> loadDetail(String id) async {
-    notifyListeners();
-  }
-
-  Future<bool> createGroup({
-    required String name,
-    required String amount,
-    required String frequency,
-    required String maxMembers,
-    required String cycleDuration,
-    required bool autoPayments,
-  }) async {
-    isCreating = true;
-    error = null;
-    createdInviteCode = null;
-    notifyListeners();
-    try {
-      final parsedAmount = double.tryParse(
-              amount.replaceAll('₦', '').replaceAll(',', '').trim()) ??
-          1000;
-      final parsedMembers = int.tryParse(maxMembers.trim()) ?? 10;
-      final code = await _repository.createGroup(
-        name: name,
-        amount: parsedAmount,
-        frequency: frequency,
-        maxMembers: parsedMembers,
-        autoPayments: autoPayments,
-      );
-      createdInviteCode = code;
-      await load();
-      return true;
-    } catch (e) {
-      error = e.toString().replaceFirst('Exception: ', '');
-      return false;
-    } finally {
-      isCreating = false;
-      notifyListeners();
-    }
-  }
-
-  Future<String?> joinByCode(String code) async {
-    isJoining = true;
-    error = null;
-    notifyListeners();
-    try {
-      final groupId = await _repository.joinByCode(code);
-      await load();
-      return groupId;
-    } catch (e) {
-      error = e.toString().replaceFirst('Exception: ', '');
-      return null;
-    } finally {
-      isJoining = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> joinGroup(String groupId) async => true;
-}
+import 'groups_controller.dart';
+import 'groups_repository.dart';
 
 // ─── GroupsScreen ─────────────────────────────────────────────────────────────
 
@@ -275,109 +37,84 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Widget build(BuildContext context) {
     final ctrl = context.watch<GroupsController>();
 
-    return AjoScaffold(
-      bottomNav: false,
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => context.read<GroupsController>().load(),
-          color: AppColors.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 110),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onTap: () => context.push('/groups/create'),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 28, horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryDark,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(18),
-                            blurRadius: 14,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: Colors.white.withAlpha(170)),
-                            ),
-                            child:
-                                const Icon(Icons.add, color: Colors.white),
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            'Create a New Savings Group',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Start a group and savings together',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(color: const Color(0xFF00B384)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 26),
-                  Container(
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: () => context.read<GroupsController>().load(),
+        color: AppColors.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 110),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () => context.push('/groups/create'),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 28, horizontal: 20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.all(6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _SegmentTab(
-                            label: 'Active Groups',
-                            icon: Icons.blur_circular_outlined,
-                            active: !_showRequests,
-                            onTap: () =>
-                                setState(() => _showRequests = false),
-                          ),
+                      color: AppColors.primaryDark,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(18),
+                          blurRadius: 14,
+                          offset: const Offset(0, 8),
                         ),
-                        Expanded(
-                          child: _SegmentTab(
-                            label: 'Requests',
-                            icon: Icons.check_circle_outline_rounded,
-                            active: _showRequests,
-                            onTap: () =>
-                                setState(() => _showRequests = true),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.white.withAlpha(170)),
                           ),
+                          child:
+                              const Icon(Icons.add, color: Colors.white),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Create a New Savings Group',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Start a group and savings together',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.copyWith(color: const Color(0xFF00B384)),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  if (ctrl.isLoading)
-                    const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(),
-                    )
-                  else if (_showRequests) ...[
+                ),
+                const SizedBox(height: 24),
+                _GroupsTabHeader(
+                  showRequests: _showRequests,
+                  onToggle: (val) => setState(() => _showRequests = val),
+                  requestCount: ctrl.requestGroups.length,
+                ),
+                const SizedBox(height: 20),
+                if (ctrl.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else ...[
+                  if (_showRequests) ...[
                     if (ctrl.requestGroups.isEmpty)
                       _EmptyState(
                           message: 'No pending group requests.',
@@ -412,7 +149,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       ],
                   ],
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -1106,6 +843,49 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton(
               onPressed: onJoin, child: const Text('Join with Code')),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupsTabHeader extends StatelessWidget {
+  const _GroupsTabHeader({
+    required this.showRequests,
+    required this.onToggle,
+    required this.requestCount,
+  });
+
+  final bool showRequests;
+  final ValueChanged<bool> onToggle;
+  final int requestCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SegmentTab(
+              label: 'Active Groups',
+              icon: Icons.blur_circular_outlined,
+              active: !showRequests,
+              onTap: () => onToggle(false),
+            ),
+          ),
+          Expanded(
+            child: _SegmentTab(
+              label: 'Requests${requestCount > 0 ? ' ($requestCount)' : ''}',
+              icon: Icons.check_circle_outline_rounded,
+              active: showRequests,
+              onTap: () => onToggle(true),
+            ),
+          ),
         ],
       ),
     );

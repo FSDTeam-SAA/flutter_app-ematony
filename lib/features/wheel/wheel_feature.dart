@@ -15,14 +15,13 @@ class WheelScreen extends StatelessWidget {
     const List<String> members = <String>[];
     const slotCount = 8;
 
-    return AjoScaffold(
-      bottomNav: false,
-      body: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 110),
-          child: Column(
-            children: [
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 110),
+        child: Column(
+          children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -197,7 +196,6 @@ class WheelScreen extends StatelessWidget {
                 ),
               ),
             ],
-          ),
         ),
       ),
     );
