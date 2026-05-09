@@ -195,7 +195,6 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AjoPatternHeader(
-                height: 296,
                 bottomRadius: 28,
                 child: Column(
                   children: [

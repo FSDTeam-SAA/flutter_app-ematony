@@ -16,7 +16,7 @@ class WheelScreen extends StatelessWidget {
     const slotCount = 8;
 
     return AjoScaffold(
-      currentIndex: -1,
+      bottomNav: false,
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -27,7 +27,6 @@ class WheelScreen extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   AjoPatternHeader(
-                    height: 298,
                     bottomRadius: 28,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

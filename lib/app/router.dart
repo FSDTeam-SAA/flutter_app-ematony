@@ -180,6 +180,14 @@ class AppRouter {
             StatefulShellBranch(
               routes: [
                 GoRoute(
+                  path: '/wheel',
+                  builder: (_, _) => const WheelScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
                   path: '/wallet',
                   builder: (_, _) => const WalletScreen(),
                 ),
@@ -225,10 +233,6 @@ class AppRouter {
         GoRoute(
           path: '/transactions',
           builder: (_, _) => const TransactionHistoryScreen(),
-        ),
-        GoRoute(
-          path: '/wheel',
-          builder: (_, _) => const WheelScreen(),
         ),
         GoRoute(
           path: '/wheel/winner',

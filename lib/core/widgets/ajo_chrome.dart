@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 // ignore: unnecessary_import
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-
-import '../config/app_assets.dart';
 import '../theme/app_colors.dart';
+import 'ajo_bottom_nav.dart';
 
 class AjoScaffold extends StatelessWidget {
   const AjoScaffold({
@@ -28,7 +27,7 @@ class AjoScaffold extends StatelessWidget {
               currentIndex: currentIndex,
               onTap: (i) {
                 HapticFeedback.selectionClick();
-                const routes = ['/home', '/groups', '/wallet', '/profile'];
+                const routes = ['/home', '/groups', '/wheel', '/wallet', '/profile'];
                 if (i < routes.length) context.go(routes[i]);
               },
             )
@@ -129,177 +128,18 @@ class _AnimatedBranchContainerState extends State<AnimatedBranchContainer>
   }
 }
 
-class AjoBottomNav extends StatelessWidget {
-  const AjoBottomNav({
-    super.key,
-    required this.currentIndex,
-    required this.onTap,
-  });
-
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  static const _items = [
-    _NavItemData(label: 'Home', icon: Icons.home_outlined, route: '/home'),
-    _NavItemData(
-      label: 'Group',
-      icon: Icons.blur_circular_outlined,
-      route: '/groups',
-    ),
-    _NavItemData(
-      label: 'Wallet',
-      icon: Icons.account_balance_wallet_outlined,
-      route: '/wallet',
-    ),
-    _NavItemData(label: 'Profile', icon: Icons.person_outline, route: '/profile'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        height: 120 + bottomInset,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.topCenter,
-          children: [
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 12 + bottomInset,
-              child: Container(
-                height: 76,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFFD9E5DF)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(14),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: _buildItem(context, 0)),
-                    Expanded(child: _buildItem(context, 1)),
-                    const SizedBox(width: 88),
-                    Expanded(child: _buildItem(context, 2)),
-                    Expanded(child: _buildItem(context, 3)),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              child: _WheelActionButton(onTap: () => context.go('/wheel')),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItem(BuildContext context, int index) {
-    final item = _items[index];
-    final isActive = currentIndex == index;
-    final foreground = isActive ? Colors.white : const Color(0xFF205446);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        if (!isActive) onTap(index);
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.primaryDark : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
-                curve: Curves.easeOut,
-                width: 46,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: isActive ? AppColors.primaryDark : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(item.icon, size: 20, color: foreground),
-              ),
-              Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.1,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: foreground,
-                ),
-              ),
-              const SizedBox(height: 4),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WheelActionButton extends StatelessWidget {
-  const _WheelActionButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 80,
-        height: 80,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: const Color(0xFFEAF4EF),
-          border: Border.all(color: Colors.white, width: 4),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(24),
-              blurRadius: 20,
-              offset: const Offset(0, 9),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(5),
-          child: ClipOval(
-            child: Image.asset(AppAssets.spinIcon2, fit: BoxFit.cover),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class AjoPatternHeader extends StatelessWidget {
   const AjoPatternHeader({
     super.key,
     required this.child,
-    this.height = 250,
+    this.height,
     this.bottomRadius = 30,
     this.padding,
   });
 
   final Widget child;
-  final double height;
+  final double? height;
   final double bottomRadius;
   final EdgeInsets? padding;
 
@@ -451,17 +291,7 @@ class AjoAvatar extends StatelessWidget {
   }
 }
 
-class _NavItemData {
-  const _NavItemData({
-    required this.label,
-    required this.icon,
-    required this.route,
-  });
 
-  final String label;
-  final IconData icon;
-  final String route;
-}
 
 class _HeaderPatternPainter extends CustomPainter {
   @override

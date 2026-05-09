@@ -19,8 +19,9 @@ class HomeRepository {
 
   Future<List<GroupModel>> fetchMyGroups() async {
     try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/groups');
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/groups',
+      );
       final raw = response.data?['data'];
       if (raw is List) {
         return raw
@@ -36,8 +37,9 @@ class HomeRepository {
 
   Future<List<PaymentModel>> fetchRecentTransactions() async {
     try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/payment/me');
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/payment/me',
+      );
       final raw = response.data?['data'];
       if (raw is List) {
         return raw
@@ -60,7 +62,7 @@ class HomeRepository {
 
 class HomeController extends ChangeNotifier {
   HomeController({required HomeRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   final HomeRepository _repository;
 
@@ -115,8 +117,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final homeCtrl = context.watch<HomeController>();
     final userName = user?.name.isNotEmpty == true ? user!.name : 'Ematony';
 
-    final firstGroup =
-        homeCtrl.groups.isNotEmpty ? homeCtrl.groups.first : null;
+    final firstGroup = homeCtrl.groups.isNotEmpty
+        ? homeCtrl.groups.first
+        : null;
 
     return AjoScaffold(
       bottomNav: false,
@@ -134,7 +137,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   clipBehavior: Clip.none,
                   children: [
                     AjoPatternHeader(
-                      height: 298,
                       bottomRadius: 28,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,10 +199,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                         height: 18,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFE53935),
-                                          borderRadius:
-                                              BorderRadius.circular(9),
+                                          borderRadius: BorderRadius.circular(
+                                            9,
+                                          ),
                                           border: Border.all(
-                                              color: Colors.white, width: 2),
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
                                         ),
                                         alignment: Alignment.center,
                                         child: const Text(
@@ -224,9 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 Text(
                                   'Your Balance',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
+                                  style: Theme.of(context).textTheme.bodyLarge
                                       ?.copyWith(color: Colors.white),
                                 ),
                                 const SizedBox(height: 6),
@@ -249,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Positioned(
                       left: 16,
                       right: 16,
-                      bottom: -84,
+                      bottom: -200,
                       child: AjoCard(
                         color: const Color(0xFFF9F1DF),
                         borderColor: const Color(0xFFF0E1BE),
@@ -289,7 +292,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                             .textTheme
                                             .headlineSmall
                                             ?.copyWith(
-                                                fontWeight: FontWeight.w600),
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -311,9 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(height: 20),
                             Text(
                               firstGroup?.formattedAmount ?? '₦1000.00',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .displaySmall
+                              style: Theme.of(context).textTheme.displaySmall
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 10),
@@ -321,9 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 Text(
                                   'Auto Payment :',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
+                                  style: Theme.of(context).textTheme.bodyLarge
                                       ?.copyWith(fontWeight: FontWeight.w500),
                                 ),
                                 const SizedBox(width: 10),
@@ -338,15 +338,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: FilledButton(
                                     onPressed: () => firstGroup != null
                                         ? context.push(
-                                            '/groups/${firstGroup.id}')
+                                            '/groups/${firstGroup.id}',
+                                          )
                                         : context.go('/wallet'),
                                     style: FilledButton.styleFrom(
                                       backgroundColor: AppColors.primaryDark,
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 24),
+                                        horizontal: 24,
+                                      ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
                                     child: const Text('Pay Now'),
@@ -368,9 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Text(
                         'Your Active Groups',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
+                        style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const Spacer(),
@@ -389,7 +388,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 else if (homeCtrl.groups.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: AjoCard(
                       radius: 22,
                       child: Center(
@@ -397,9 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.all(16),
                           child: Text(
                             'No active groups yet. Create or join one!',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
+                            style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(color: AppColors.mutedText),
                           ),
                         ),
@@ -410,11 +409,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: GestureDetector(
-                      onTap: () => context
-                          .push('/groups/${homeCtrl.groups.first.id}'),
+                      onTap: () =>
+                          context.push('/groups/${homeCtrl.groups.first.id}'),
                       child: _ActiveGroupCard(
-                          group: homeCtrl.groups.first,
-                          userName: userName),
+                        group: homeCtrl.groups.first,
+                        userName: userName,
+                      ),
                     ),
                   ),
                 const SizedBox(height: 26),
@@ -425,9 +425,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Quick Action',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
+                      style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -490,10 +488,9 @@ class _ActiveGroupCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   group.name,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               Column(
@@ -501,10 +498,9 @@ class _ActiveGroupCard extends StatelessWidget {
                 children: [
                   Text(
                     '${(group.completionPercent * 100).toInt()}%',
-                    style: Theme.of(context)
-                        .textTheme
-                        .displaySmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   Text(
                     'Completed',
@@ -517,10 +513,9 @@ class _ActiveGroupCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Rotation : ${group.membersCount} of ${group.maxMembers}',
-            style: Theme.of(context)
-                .textTheme
-                .bodyLarge
-                ?.copyWith(color: AppColors.mutedText),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: AppColors.mutedText),
           ),
           const SizedBox(height: 16),
           ClipRRect(
@@ -529,8 +524,9 @@ class _ActiveGroupCard extends StatelessWidget {
               value: group.completionPercent,
               minHeight: 7,
               backgroundColor: const Color(0xFFF5EBD7),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primary,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -540,10 +536,9 @@ class _ActiveGroupCard extends StatelessWidget {
               const Spacer(),
               Text(
                 'Upcoming Wheel : Apr 27',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.copyWith(color: AppColors.mutedText),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppColors.mutedText),
               ),
             ],
           ),
@@ -589,10 +584,9 @@ class _QuickActionCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               label,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w500),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -657,9 +651,9 @@ class _MiniMemberCluster extends StatelessWidget {
             child: Text(
               '+9',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.text,
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: AppColors.text,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

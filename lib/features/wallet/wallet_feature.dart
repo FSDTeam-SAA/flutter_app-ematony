@@ -118,7 +118,6 @@ class _WalletScreenState extends State<WalletScreen> {
             child: Column(
               children: [
                 AjoPatternHeader(
-                  height: 252,
                   bottomRadius: 28,
                   child: Column(
                     children: [
