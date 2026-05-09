@@ -8,17 +8,14 @@ import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/groups/groups_controller.dart';
 import '../features/groups/groups_repository.dart';
-import '../features/groups/groups_screen.dart';
 import '../features/home/home_controller.dart';
 import '../features/home/home_repository.dart';
-import '../features/home/home_screen.dart';
 import '../features/notifications/notifications_controller.dart';
 import '../features/notifications/notifications_repository.dart';
-import '../features/notifications/notifications_screen.dart';
-import '../features/profile/profile_screen.dart';
+import '../features/profile/profile_controller.dart';
+import '../features/profile/profile_repository.dart';
 import '../features/wallet/wallet_controller.dart';
 import '../features/wallet/wallet_repository.dart';
-import '../features/wallet/wallet_screen.dart';
 import 'router.dart';
 
 class EmatonyApp extends StatelessWidget {

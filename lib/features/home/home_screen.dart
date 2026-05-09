@@ -56,7 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Row(
                           children: [
-                            AjoAvatar(name: userName, radius: 20),
+                            AjoAvatar(
+                              name: userName,
+                              avatarUrl: user?.avatarUrl,
+                              radius: 20,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
