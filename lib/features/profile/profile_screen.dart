@@ -19,162 +19,6 @@ import 'profile_repository.dart';
 
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 
-class ProfileRepository {
-  ProfileRepository({required ApiClient apiClient}) : _apiClient = apiClient;
-
-  final ApiClient _apiClient;
-
-  Future<AppUser> getProfile() async {
-    try {
-      final response =
-          await _apiClient.dio.get<Map<String, dynamic>>('/user/profile');
-      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      return AppUser.fromJson(data);
-    } on DioException {
-      rethrow;
-    }
-  }
-
-  Future<AppUser> updateProfile({
-    required String name,
-    String? phone,
-    String? bio,
-    String? imageFilePath,
-  }) async {
-    try {
-      final formData = FormData.fromMap({
-        'name': name,
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (bio != null && bio.isNotEmpty) 'bio': bio,
-        if (imageFilePath != null)
-          'avatar': await MultipartFile.fromFile(
-            imageFilePath,
-            filename: 'avatar.jpg',
-          ),
-      });
-      final response = await _apiClient.dio.put<Map<String, dynamic>>(
-        '/user/profile',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
-      );
-      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      return AppUser.fromJson(data);
-    } on DioException catch (e) {
-      final msg = () {
-        try {
-          final d = e.response?.data;
-          if (d is Map) return d['message']?.toString();
-        } catch (_) {}
-        return null;
-      }();
-      throw Exception(msg ?? 'Failed to update profile.');
-    }
-  }
-
-  Future<void> changePassword({
-    required String currentPassword,
-    required String newPassword,
-    required String confirmPassword,
-  }) async {
-    try {
-      await _apiClient.dio.put<Map<String, dynamic>>(
-        '/user/password',
-        data: {
-          'currentPassword': currentPassword,
-          'newPassword': newPassword,
-          'confirmPassword': confirmPassword,
-        },
-      );
-    } on DioException catch (e) {
-      final msg = () {
-        try {
-          final d = e.response?.data;
-          if (d is Map) return d['message']?.toString();
-        } catch (_) {}
-        return null;
-      }();
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout) {
-        await AppMockData.simulateDelay();
-        return;
-      }
-      throw Exception(msg ?? 'Failed to change password.');
-    }
-  }
-}
-
-// ─── Controller ───────────────────────────────────────────────────────────────
-
-class ProfileController extends ChangeNotifier {
-  ProfileController({required ProfileRepository repository})
-      : _repository = repository;
-
-  final ProfileRepository _repository;
-
-  bool isSaving = false;
-  String? error;
-  String? successMessage;
-
-  Future<bool> saveProfile({
-    required AppUser current,
-    required String name,
-    required String phone,
-    required String bio,
-    required AuthController authCtrl,
-    String? imageFilePath,
-  }) async {
-    isSaving = true;
-    error = null;
-    successMessage = null;
-    notifyListeners();
-    try {
-      final updated = await _repository.updateProfile(
-        name: name,
-        phone: phone,
-        bio: bio,
-        imageFilePath: imageFilePath,
-      );
-      await authCtrl.updateProfile(updated);
-      successMessage = 'Profile updated successfully.';
-      return true;
-    } catch (e) {
-      error = e.toString().replaceFirst('Exception: ', '');
-      return false;
-    } finally {
-      isSaving = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> changePassword({
-    required String currentPassword,
-    required String newPassword,
-    required String confirmPassword,
-  }) async {
-    isSaving = true;
-    error = null;
-    successMessage = null;
-    notifyListeners();
-    try {
-      await _repository.changePassword(
-        currentPassword: currentPassword,
-        newPassword: newPassword,
-        confirmPassword: confirmPassword,
-      );
-      successMessage = 'Password changed successfully.';
-      return true;
-    } catch (e) {
-      error = e.toString().replaceFirst('Exception: ', '');
-      return false;
-    } finally {
-      isSaving = false;
-      notifyListeners();
-    }
-  }
-}
-
-// ─── ProfileScreen ────────────────────────────────────────────────────────────
-
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -201,14 +45,11 @@ class ProfileScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 14),
-                    user?.avatarUrl != null
-                        ? CircleAvatar(
-                            radius: 54,
-                            backgroundColor: Colors.white,
-                            backgroundImage: NetworkImage(user!.avatarUrl!),
-                            onBackgroundImageError: (_, _) {},
-                          )
-                        : AjoAvatar(name: name, radius: 54),
+                    AjoAvatar(
+                      name: name,
+                      avatarUrl: user?.avatarUrl,
+                      radius: 54,
+                    ),
                     const SizedBox(height: 14),
                     Text(
                       name,
@@ -474,7 +315,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
 
     return _ProfileFormScaffold(
       title: 'Personal Info',
-      loading: ctrl.isSaving,
+      loading: ctrl.isLoading,
       child: Column(
         children: [
           // ── Avatar with edit badge ──
@@ -488,20 +329,11 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                         radius: 54,
                         backgroundImage: FileImage(_pickedImage!),
                       )
-                    : user?.avatarUrl != null
-                        ? CircleAvatar(
-                            radius: 54,
-                            backgroundImage:
-                                NetworkImage(user!.avatarUrl!),
-                            onBackgroundImageError: (_, _) {},
-                            child: null,
-                          )
-                        : AjoAvatar(
-                            name: _nameCtrl.text.isEmpty
-                                ? 'A'
-                                : _nameCtrl.text,
-                            radius: 54,
-                          ),
+                    : AjoAvatar(
+                        name: _nameCtrl.text.isEmpty ? 'A' : _nameCtrl.text,
+                        avatarUrl: user?.avatarUrl,
+                        radius: 54,
+                      ),
               ),
               Positioned(
                 right: -2,
@@ -569,12 +401,6 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
               child: Text(ctrl.error!,
                   style: const TextStyle(color: AppColors.danger)),
             ),
-          if (ctrl.successMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(ctrl.successMessage!,
-                  style: const TextStyle(color: AppColors.primary)),
-            ),
         ],
       ),
       onSave: () async {
@@ -584,19 +410,24 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
         final phone = _phoneCtrl.text.trim();
         final bio = _bioCtrl.text.trim();
         final imagePath = _pickedImage?.path;
-        final ok = await profileCtrl.saveProfile(
-          current: authCtrl.currentUser!,
+        await profileCtrl.updateProfile(
           name: name,
           phone: phone,
           bio: bio,
-          authCtrl: authCtrl,
           imageFilePath: imagePath,
+          onSuccess: (updatedUser) async {
+            await authCtrl.updateProfile(updatedUser);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profile updated successfully'),
+                backgroundColor: AppColors.primary,
+              ),
+            );
+            setState(() => _pickedImage = null);
+            if (context.mounted) context.pop();
+          },
         );
-        if (!mounted) return;
-        if (ok) {
-          setState(() => _pickedImage = null);
-          if (context.mounted) context.pop();
-        }
       },
     );
   }
@@ -631,7 +462,7 @@ class _PasswordSecurityScreenState extends State<PasswordSecurityScreen> {
 
     return _ProfileFormScaffold(
       title: 'Password & Security',
-      loading: ctrl.isSaving,
+      loading: ctrl.isLoading,
       child: Column(
         children: [
           LabeledTextField(
@@ -660,12 +491,6 @@ class _PasswordSecurityScreenState extends State<PasswordSecurityScreen> {
               child: Text(ctrl.error!,
                   style: const TextStyle(color: AppColors.danger)),
             ),
-          if (ctrl.successMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(ctrl.successMessage!,
-                  style: const TextStyle(color: AppColors.primary)),
-            ),
         ],
       ),
       onSave: () async {
@@ -685,15 +510,21 @@ class _PasswordSecurityScreenState extends State<PasswordSecurityScreen> {
         }
         final profileCtrl = context.read<ProfileController>();
         final ok = await profileCtrl.changePassword(
-          currentPassword: _currentCtrl.text,
-          newPassword: _newCtrl.text,
-          confirmPassword: _confirmCtrl.text,
+          current: _currentCtrl.text,
+          next: _newCtrl.text,
+          confirm: _confirmCtrl.text,
         );
         if (!mounted) return;
         if (ok) {
           _currentCtrl.clear();
           _newCtrl.clear();
           _confirmCtrl.clear();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Password changed successfully'),
+              backgroundColor: AppColors.primary,
+            ),
+          );
         }
       },
     );
