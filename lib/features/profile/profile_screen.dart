@@ -186,7 +186,7 @@ class ProfileScreen extends StatelessWidget {
         user?.phone?.isNotEmpty == true ? user!.phone! : '+123-456 789';
 
     return AjoScaffold(
-      currentIndex: 3,
+      bottomNav: false,
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(

@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/app_assets.dart';
 import '../theme/app_colors.dart';
 
 class AjoScaffold extends StatelessWidget {
   const AjoScaffold({
     super.key,
-    required this.currentIndex,
+    this.currentIndex = 0,
     required this.body,
     this.bottomNav = true,
   });
@@ -25,8 +26,105 @@ class AjoScaffold extends StatelessWidget {
       bottomNavigationBar: bottomNav
           ? AjoBottomNav(
               currentIndex: currentIndex,
+              onTap: (i) {
+                HapticFeedback.selectionClick();
+                const routes = ['/home', '/groups', '/wallet', '/profile'];
+                if (i < routes.length) context.go(routes[i]);
+              },
             )
           : null,
+    );
+  }
+}
+
+/// Persistent shell scaffold used by [StatefulShellRoute].
+class MainShell extends StatelessWidget {
+  const MainShell({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: navigationShell,
+      bottomNavigationBar: AjoBottomNav(
+        currentIndex: navigationShell.currentIndex,
+        onTap: (index) {
+          HapticFeedback.selectionClick();
+          navigationShell.goBranch(
+            index,
+            initialLocation: index == navigationShell.currentIndex,
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Custom [StatefulShellRoute] navigator container with fade-in on tab switch.
+class AnimatedBranchContainer extends StatefulWidget {
+  const AnimatedBranchContainer({
+    super.key,
+    required this.currentIndex,
+    required this.children,
+  });
+
+  final int currentIndex;
+  final List<Widget> children;
+
+  @override
+  State<AnimatedBranchContainer> createState() =>
+      _AnimatedBranchContainerState();
+}
+
+class _AnimatedBranchContainerState extends State<AnimatedBranchContainer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 230),
+      value: 1.0,
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+  }
+
+  @override
+  void didUpdateWidget(AnimatedBranchContainer old) {
+    super.didUpdateWidget(old);
+    if (old.currentIndex != widget.currentIndex) {
+      _ctrl.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: List.generate(widget.children.length, (i) {
+        final active = i == widget.currentIndex;
+        return Offstage(
+          offstage: !active,
+          child: TickerMode(
+            enabled: active,
+            child: FadeTransition(
+              opacity: active ? _fade : const AlwaysStoppedAnimation(1.0),
+              child: widget.children[i],
+            ),
+          ),
+        );
+      }),
     );
   }
 }
@@ -35,93 +133,73 @@ class AjoBottomNav extends StatelessWidget {
   const AjoBottomNav({
     super.key,
     required this.currentIndex,
+    required this.onTap,
   });
 
   final int currentIndex;
+  final ValueChanged<int> onTap;
 
   static const _items = [
     _NavItemData(label: 'Home', icon: Icons.home_outlined, route: '/home'),
-    _NavItemData(label: 'Group', icon: Icons.blur_circular_outlined, route: '/groups'),
-    _NavItemData(label: 'Wallet', icon: Icons.account_balance_wallet_outlined, route: '/wallet'),
+    _NavItemData(
+      label: 'Group',
+      icon: Icons.blur_circular_outlined,
+      route: '/groups',
+    ),
+    _NavItemData(
+      label: 'Wallet',
+      icon: Icons.account_balance_wallet_outlined,
+      route: '/wallet',
+    ),
     _NavItemData(label: 'Profile', icon: Icons.person_outline, route: '/profile'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: SizedBox(
-          height: 98,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.topCenter,
-            children: [
-              Positioned.fill(
-                top: 14,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildItem(context, 0)),
-                      Expanded(child: _buildItem(context, 1)),
-                      const SizedBox(width: 66),
-                      Expanded(child: _buildItem(context, 2)),
-                      Expanded(child: _buildItem(context, 3)),
-                    ],
-                  ),
+      child: SizedBox(
+        height: 120 + bottomInset,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.topCenter,
+          children: [
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 12 + bottomInset,
+              child: Container(
+                height: 76,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFD9E5DF)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(14),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildItem(context, 0)),
+                    Expanded(child: _buildItem(context, 1)),
+                    const SizedBox(width: 88),
+                    Expanded(child: _buildItem(context, 2)),
+                    Expanded(child: _buildItem(context, 3)),
+                  ],
                 ),
               ),
-              Positioned(
-                top: 0,
-                child: GestureDetector(
-                  onTap: () => context.go('/wheel'),
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.primaryDark,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(22),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.warning,
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.donut_large_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+            Positioned(
+              top: 0,
+              child: _WheelActionButton(onTap: () => context.go('/wheel')),
+            ),
+          ],
         ),
       ),
     );
@@ -130,43 +208,81 @@ class AjoBottomNav extends StatelessWidget {
   Widget _buildItem(BuildContext context, int index) {
     final item = _items[index];
     final isActive = currentIndex == index;
-    final foreground = isActive ? Colors.white : AppColors.text;
+    final foreground = isActive ? Colors.white : const Color(0xFF205446);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       onTap: () {
-        if (!isActive) {
-          context.go(item.route);
-        }
+        if (!isActive) onTap(index);
       },
       child: Padding(
-        padding: const EdgeInsets.only(top: 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 50,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.primaryDark : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+        padding: const EdgeInsets.all(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primaryDark : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 170),
+                curve: Curves.easeOut,
+                width: 46,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primaryDark : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(item.icon, size: 20, color: foreground),
               ),
-              child: Icon(
-                item.icon,
-                size: 22,
-                color: foreground,
+              Text(
+                item.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.1,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: foreground,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              item.label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: isActive ? AppColors.primaryDark : AppColors.text,
-              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WheelActionButton extends StatelessWidget {
+  const _WheelActionButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFFEAF4EF),
+          border: Border.all(color: Colors.white, width: 4),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(24),
+              blurRadius: 20,
+              offset: const Offset(0, 9),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: ClipOval(
+            child: Image.asset(AppAssets.spinIcon2, fit: BoxFit.cover),
+          ),
         ),
       ),
     );
@@ -207,12 +323,11 @@ class AjoPatternHeader extends StatelessWidget {
         child: Stack(
           children: [
             Positioned.fill(
-              child: CustomPaint(
-                painter: _HeaderPatternPainter(),
-              ),
+              child: CustomPaint(painter: _HeaderPatternPainter()),
             ),
             Padding(
-              padding: padding ??
+              padding:
+                  padding ??
                   EdgeInsets.fromLTRB(
                     16,
                     MediaQuery.of(context).padding.top + 12,
@@ -229,10 +344,7 @@ class AjoPatternHeader extends StatelessWidget {
 }
 
 class AjoBackHeader extends StatelessWidget {
-  const AjoBackHeader({
-    super.key,
-    required this.title,
-  });
+  const AjoBackHeader({super.key, required this.title});
 
   final String title;
 
@@ -255,9 +367,9 @@ class AjoBackHeader extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -300,11 +412,7 @@ class AjoCard extends StatelessWidget {
 }
 
 class AjoAvatar extends StatelessWidget {
-  const AjoAvatar({
-    super.key,
-    required this.name,
-    this.radius = 22,
-  });
+  const AjoAvatar({super.key, required this.name, this.radius = 22});
 
   final String name;
   final double radius;
@@ -312,7 +420,11 @@ class AjoAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parts = name.trim().split(RegExp(r'\s+'));
-    final initials = parts.take(2).map((part) => part.isEmpty ? '' : part[0]).join().toUpperCase();
+    final initials = parts
+        .take(2)
+        .map((part) => part.isEmpty ? '' : part[0])
+        .join()
+        .toUpperCase();
 
     return Container(
       width: radius * 2,
@@ -354,47 +466,51 @@ class _NavItemData {
 class _HeaderPatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withAlpha(22)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
+    final paint =
+        Paint()
+          ..color = Colors.white.withAlpha(22)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4;
 
-    final pathA = Path()
-      ..moveTo(-size.width * 0.08, size.height * 0.76)
-      ..quadraticBezierTo(
-        size.width * 0.18,
-        size.height * 0.42,
-        size.width * 0.55,
-        size.height * 0.54,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.83,
-        size.height * 0.63,
-        size.width * 1.08,
-        size.height * 0.46,
-      );
-    final pathB = Path()
-      ..moveTo(size.width * 0.12, size.height * 1.02)
-      ..quadraticBezierTo(
-        size.width * 0.08,
-        size.height * 0.56,
-        size.width * 0.50,
-        size.height * 0.28,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.78,
-        size.height * 0.10,
-        size.width * 1.02,
-        size.height * 0.30,
-      );
-    final pathC = Path()
-      ..moveTo(size.width * 0.02, size.height * 0.22)
-      ..quadraticBezierTo(
-        size.width * 0.38,
-        size.height * 0.78,
-        size.width * 0.98,
-        size.height * 0.74,
-      );
+    final pathA =
+        Path()
+          ..moveTo(-size.width * 0.08, size.height * 0.76)
+          ..quadraticBezierTo(
+            size.width * 0.18,
+            size.height * 0.42,
+            size.width * 0.55,
+            size.height * 0.54,
+          )
+          ..quadraticBezierTo(
+            size.width * 0.83,
+            size.height * 0.63,
+            size.width * 1.08,
+            size.height * 0.46,
+          );
+    final pathB =
+        Path()
+          ..moveTo(size.width * 0.12, size.height * 1.02)
+          ..quadraticBezierTo(
+            size.width * 0.08,
+            size.height * 0.56,
+            size.width * 0.50,
+            size.height * 0.28,
+          )
+          ..quadraticBezierTo(
+            size.width * 0.78,
+            size.height * 0.10,
+            size.width * 1.02,
+            size.height * 0.30,
+          );
+    final pathC =
+        Path()
+          ..moveTo(size.width * 0.02, size.height * 0.22)
+          ..quadraticBezierTo(
+            size.width * 0.38,
+            size.height * 0.78,
+            size.width * 0.98,
+            size.height * 0.74,
+          );
 
     canvas.drawPath(pathA, paint);
     canvas.drawPath(pathB, paint);

@@ -106,7 +106,7 @@ class _WalletScreenState extends State<WalletScreen> {
         : '₦••••••';
 
     return AjoScaffold(
-      currentIndex: 2,
+      bottomNav: false,
       body: SafeArea(
         top: false,
         child: RefreshIndicator(

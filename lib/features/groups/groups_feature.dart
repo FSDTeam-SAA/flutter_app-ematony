@@ -276,7 +276,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final ctrl = context.watch<GroupsController>();
 
     return AjoScaffold(
-      currentIndex: 1,
+      bottomNav: false,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () => context.read<GroupsController>().load(),

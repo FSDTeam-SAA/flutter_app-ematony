@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../core/widgets/ajo_chrome.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_screens.dart';
 import '../features/groups/groups_feature.dart';
@@ -46,10 +47,14 @@ class AppRouter {
             loc != '/splash') {
           return '/onboarding';
         }
-        if (isAuthenticated && isVerified && (loc == '/login' || loc == '/signup' || loc == '/onboarding')) {
+        if (isAuthenticated &&
+            isVerified &&
+            (loc == '/login' || loc == '/signup' || loc == '/onboarding')) {
           return '/home';
         }
-        if (isAuthenticated && !isVerified && (loc == '/login' || loc == '/signup')) {
+        if (isAuthenticated &&
+            !isVerified &&
+            (loc == '/login' || loc == '/signup')) {
           return '/onboarding';
         }
         return null;
@@ -146,18 +151,55 @@ class AppRouter {
           builder: (_, _) => const KycVerifiedScreen(),
         ),
 
-        // ── Main Tabs ──
-        GoRoute(
-          path: '/home',
-          builder: (_, _) => const HomeScreen(),
+        // ── Main Tabs (persistent shell with animated transitions) ──
+        StatefulShellRoute(
+          navigatorContainerBuilder: (context, navigationShell, children) =>
+              AnimatedBranchContainer(
+                currentIndex: navigationShell.currentIndex,
+                children: children,
+              ),
+          builder: (context, state, navigationShell) =>
+              MainShell(navigationShell: navigationShell),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/home',
+                  builder: (_, _) => const HomeScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/groups',
+                  builder: (_, _) => const GroupsScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/wallet',
+                  builder: (_, _) => const WalletScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/profile',
+                  builder: (_, _) => const ProfileScreen(),
+                ),
+              ],
+            ),
+          ],
         ),
+
+        // ── Sub-routes (outside shell — no nav bar) ──
         GoRoute(
           path: '/notifications',
           builder: (_, _) => const NotificationsScreen(),
-        ),
-        GoRoute(
-          path: '/groups',
-          builder: (_, _) => const GroupsScreen(),
         ),
         GoRoute(
           path: '/groups/create',
@@ -181,10 +223,6 @@ class AppRouter {
           ),
         ),
         GoRoute(
-          path: '/wallet',
-          builder: (_, _) => const WalletScreen(),
-        ),
-        GoRoute(
           path: '/transactions',
           builder: (_, _) => const TransactionHistoryScreen(),
         ),
@@ -195,13 +233,10 @@ class AppRouter {
         GoRoute(
           path: '/wheel/winner',
           builder: (context, state) => WinnerCongratulationsScreen(
-            winnerName: state.uri.queryParameters['name'] ?? 'Ajo Family Member',
+            winnerName:
+                state.uri.queryParameters['name'] ?? 'Ajo Family Member',
             amount: state.uri.queryParameters['amount'] ?? '₦25,000',
           ),
-        ),
-        GoRoute(
-          path: '/profile',
-          builder: (_, _) => const ProfileScreen(),
         ),
         GoRoute(
           path: '/profile/personal-info',

@@ -62,12 +62,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/image 89.png
-    - assets/Group 96.png
-    - assets/Ellipse 76.png
-    - assets/Ellipse 75.png
-    - assets/Copilot_20260421_100358 1.png
-    - assets/Copilot_20260421_100358 2.png
-    - assets/Copilot_20260421_100358 2 (1).png
-    - assets/Frame 2147229725.png
-    - assets/7265d9c07c10e2d65c24ebf944a4d23f6d725d71.png
+    - assets/logos/
+    - assets/patterns/
+    - assets/onboarding/
+    - assets/wheel/
+    - assets/backgrounds/

@@ -119,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
         homeCtrl.groups.isNotEmpty ? homeCtrl.groups.first : null;
 
     return AjoScaffold(
-      currentIndex: 0,
+      bottomNav: false,
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
