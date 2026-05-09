@@ -1,6 +1,14 @@
 import 'package:flutter/foundation.dart';
 import '../../core/models/group_model.dart';
+import '../wheel/wheel_controller.dart';
 import 'groups_repository.dart';
+
+class GroupPreview {
+  GroupPreview({required this.rotations, required this.nextWheelDate});
+
+  final List<WheelRotationItem> rotations;
+  final DateTime? nextWheelDate;
+}
 
 class GroupsController extends ChangeNotifier {
   GroupsController({required GroupsRepository repository})
@@ -13,6 +21,7 @@ class GroupsController extends ChangeNotifier {
   bool isJoining = false;
   List<GroupModel> activeGroups = [];
   List<GroupModel> requestGroups = [];
+  Map<String, GroupPreview> previews = {};
   String? error;
   String? createdInviteCode;
 
@@ -29,12 +38,52 @@ class GroupsController extends ChangeNotifier {
       ]);
       activeGroups = results[0];
       requestGroups = results[1];
+
+      previews = {};
+      if (activeGroups.isNotEmpty) {
+        final fetched = await Future.wait(
+          activeGroups.map((g) async {
+            try {
+              final data = await _repository.getGroupWheel(g.id);
+              return MapEntry(g.id, _previewFromWheel(data, g));
+            } catch (_) {
+              return MapEntry(g.id, GroupPreview(rotations: const [], nextWheelDate: null));
+            }
+          }),
+        );
+        previews = Map.fromEntries(fetched);
+      }
     } catch (e) {
       error = e.toString();
     } finally {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  GroupPreview _previewFromWheel(Map<String, dynamic> data, GroupModel group) {
+    final rotationsRaw = data['rotations'];
+    final rotations = (rotationsRaw is List)
+        ? rotationsRaw
+            .whereType<Map<String, dynamic>>()
+            .map(WheelRotationItem.fromJson)
+            .toList()
+        : <WheelRotationItem>[];
+    final total =
+        (data['totalMembers'] as num?)?.toInt() ?? rotations.length;
+    if (total > 0) group.membersCount = total;
+
+    DateTime? next;
+    final window = data['spinWindow'];
+    if (window is Map<String, dynamic>) {
+      final startDay = (window['startDay'] as num?)?.toInt() ?? 25;
+      final today = (window['today'] as num?)?.toInt() ?? DateTime.now().day;
+      final now = DateTime.now();
+      next = today > startDay
+          ? DateTime(now.year, now.month + 1, startDay)
+          : DateTime(now.year, now.month, startDay);
+    }
+    return GroupPreview(rotations: rotations, nextWheelDate: next);
   }
 
   Future<void> loadDetail(String id) async {

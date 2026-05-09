@@ -52,43 +52,37 @@ class _WheelScreenState extends State<WheelScreen> {
     final selected = controller.selectedGroup;
     return Column(
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            AjoPatternHeader(
-              bottomRadius: 28,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 28),
-                  Text(
-                    'Select Group',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
-                  _GroupDropdown(controller: controller),
-                  const SizedBox(height: 90),
-                ],
+        AjoPatternHeader(
+          bottomRadius: 28,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                'Select Group',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: -56,
-              child: AjoCard(
-                color: AppColors.primaryDark,
-                radius: 22,
-                borderColor: const Color(0xFF8DA398),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(18),
-                    blurRadius: 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              _GroupDropdown(controller: controller),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDark,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFF8DA398)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(18),
+                      blurRadius: 14,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
                 child: Column(
                   children: [
                     Text(
@@ -132,10 +126,11 @@ class _WheelScreenState extends State<WheelScreen> {
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+            ],
+          ),
         ),
-        const SizedBox(height: 88),
+        const SizedBox(height: 24),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(

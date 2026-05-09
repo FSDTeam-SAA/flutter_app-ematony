@@ -46,53 +46,59 @@ class _WalletScreenState extends State<WalletScreen> {
             children: [
               AjoPatternHeader(
                 bottomRadius: 28,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 36),
-                    Text(
-                      'Your Balance',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(color: Colors.white),
-                    ),
-                    const SizedBox(height: 6),
-                    ctrl.isLoading
-                        ? const SizedBox(
-                            height: 42,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
-                        : Text(
-                            balanceText,
-                            style: Theme.of(context)
-                                .textTheme
-                                .displaySmall
-                                ?.copyWith(
-                                  color: const Color(0xFFFDF6EC),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          setState(() => _balanceVisible = !_balanceVisible),
-                      icon: Icon(
-                        _balanceVisible
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        size: 18,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 36),
+                      Text(
+                        'Your Balance',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(color: Colors.white),
                       ),
-                      label: const Text('View Balance'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                            color: Colors.white.withAlpha(90)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+                      const SizedBox(height: 6),
+                      ctrl.isLoading
+                          ? const SizedBox(
+                              height: 42,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : Text(
+                              balanceText,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .displaySmall
+                                  ?.copyWith(
+                                    color: const Color(0xFFFDF6EC),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () => setState(
+                            () => _balanceVisible = !_balanceVisible),
+                        icon: Icon(
+                          _balanceVisible
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: 18,
+                        ),
+                        label: const Text('View Balance'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                              color: Colors.white.withAlpha(90)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               Padding(
@@ -112,22 +118,24 @@ class _WalletScreenState extends State<WalletScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _ActionSquare(
-                          icon: Icons.north_east_rounded,
-                          iconBg: AppColors.subtle,
-                          iconColor: AppColors.primary,
-                          label: 'Top Up',
-                          onTap: () => _showSnackBar(
-                              context, 'Top up flow coming soon.'),
+                        Expanded(
+                          child: _ActionSquare(
+                            icon: Icons.north_east_rounded,
+                            iconBg: AppColors.subtle,
+                            iconColor: AppColors.primary,
+                            label: 'Top Up',
+                            onTap: () => _showComingSoon(context, 'Top Up'),
+                          ),
                         ),
-                        const SizedBox(width: 18),
-                        _ActionSquare(
-                          icon: Icons.upload_outlined,
-                          iconBg: AppColors.dangerLight,
-                          iconColor: AppColors.danger,
-                          label: 'Withdraw',
-                          onTap: () => _showSnackBar(
-                              context, 'Withdraw flow coming soon.'),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: _ActionSquare(
+                            icon: Icons.upload_outlined,
+                            iconBg: AppColors.dangerLight,
+                            iconColor: AppColors.danger,
+                            label: 'Withdraw',
+                            onTap: () => _showComingSoon(context, 'Withdraw'),
+                          ),
                         ),
                       ],
                     ),
@@ -252,26 +260,30 @@ class _ActionSquare extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(10),
+      child: AjoCard(
+        radius: 22,
+        padding: const EdgeInsets.symmetric(vertical: 22),
+        child: Column(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 26),
             ),
-            child: Icon(icon, color: iconColor, size: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w500),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -339,9 +351,69 @@ class _TransactionRow extends StatelessWidget {
   }
 }
 
-void _showSnackBar(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-        content: Text(message), backgroundColor: AppColors.primary),
+void _showComingSoon(BuildContext context, String feature) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.subtle,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.hourglass_top_rounded,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '$feature coming soon',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "We're putting the finishing touches on this. Check back shortly.",
+                textAlign: TextAlign.center,
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(color: AppColors.mutedText),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryDark,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Got it'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
   );
 }

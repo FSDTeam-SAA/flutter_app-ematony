@@ -37,41 +37,48 @@ class ProfileScreen extends StatelessWidget {
             children: [
               AjoPatternHeader(
                 bottomRadius: 28,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 14),
-                    AjoAvatar(
-                      name: name,
-                      avatarUrl: user?.avatarUrl,
-                      radius: 54,
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      name,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      email,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(color: Colors.white.withAlpha(210)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      phone,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyLarge
-                          ?.copyWith(color: Colors.white.withAlpha(210)),
-                    ),
-                  ],
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 14),
+                      AjoAvatar(
+                        name: name,
+                        avatarUrl: user?.avatarUrl,
+                        radius: 54,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        name,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        email,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(color: Colors.white.withAlpha(210)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        phone,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(color: Colors.white.withAlpha(210)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Padding(

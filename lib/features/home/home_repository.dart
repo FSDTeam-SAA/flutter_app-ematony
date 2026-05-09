@@ -54,6 +54,17 @@ class HomeRepository {
     }
   }
 
+  Future<Map<String, dynamic>> fetchGroupWheel(String id) async {
+    try {
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/groups/$id/wheel',
+      );
+      return response.data?['data'] as Map<String, dynamic>? ?? {};
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
   Future<List<PaymentModel>> fetchRecentTransactions() async {
     try {
       final response = await _apiClient.dio.get<Map<String, dynamic>>(

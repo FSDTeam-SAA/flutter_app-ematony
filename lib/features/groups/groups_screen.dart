@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/ajo_chrome.dart';
 import '../../core/widgets/labeled_text_field.dart';
 import '../../core/widgets/primary_button.dart';
+import '../wheel/wheel_controller.dart';
 import 'groups_controller.dart';
 import 'groups_repository.dart';
 
@@ -139,6 +140,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       for (final group in ctrl.activeGroups) ...[
                         _ActiveGroupCard(
                           group: group,
+                          preview: ctrl.previews[group.id],
                           onTap: () =>
                               context.push('/groups/${group.id}'),
                         ),
@@ -934,14 +936,39 @@ class _SegmentTab extends StatelessWidget {
 }
 
 class _ActiveGroupCard extends StatelessWidget {
-  const _ActiveGroupCard({required this.group, required this.onTap});
+  const _ActiveGroupCard({
+    required this.group,
+    required this.preview,
+    required this.onTap,
+  });
 
   final GroupModel group;
+  final GroupPreview? preview;
   final VoidCallback onTap;
+
+  String _formatNextWheel(DateTime? d) {
+    if (d == null) return 'Not scheduled';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final pct = (group.completionPercent * 100).toInt();
+    final rotations = preview?.rotations ?? const <WheelRotationItem>[];
     return GestureDetector(
       onTap: onTap,
       child: AjoCard(
@@ -1000,10 +1027,13 @@ class _ActiveGroupCard extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                const _SmallMemberCluster(),
+                _SmallMemberCluster(
+                  rotations: rotations,
+                  totalMembers: group.membersCount,
+                ),
                 const Spacer(),
                 Text(
-                  'Upcoming Wheel : Apr 27',
+                  'Upcoming Wheel : ${_formatNextWheel(preview?.nextWheelDate)}',
                   style: Theme.of(context)
                       .textTheme
                       .bodyLarge
@@ -1098,7 +1128,10 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 20),
           Row(
             children: [
-              const _SmallMemberCluster(),
+              _SmallMemberCluster(
+                rotations: const <WheelRotationItem>[],
+                totalMembers: memberCount,
+              ),
               const Spacer(),
               FilledButton(
                 onPressed: onJoin,
@@ -1118,30 +1151,55 @@ class _RequestCard extends StatelessWidget {
 }
 
 class _SmallMemberCluster extends StatelessWidget {
-  const _SmallMemberCluster();
+  const _SmallMemberCluster({
+    required this.rotations,
+    required this.totalMembers,
+  });
+
+  final List<WheelRotationItem> rotations;
+  final int totalMembers;
 
   @override
   Widget build(BuildContext context) {
+    final shown = rotations.take(3).toList();
+    final remainder = (totalMembers - shown.length).clamp(0, 999);
+    final hasShown = shown.isNotEmpty;
+    final placeholderCount = hasShown ? 0 : (totalMembers > 0 ? 1 : 0);
+    final avatarCount = hasShown ? shown.length : placeholderCount;
+    final width = avatarCount * 18.0 + (remainder > 0 ? 38 : 14);
+
     return SizedBox(
-      width: 82,
+      width: width.clamp(28, 120),
       height: 28,
       child: Stack(
         children: [
-          const Positioned(
-              left: 0, child: AjoAvatar(name: 'Ematony', radius: 14)),
-          const Positioned(
-              left: 18, child: AjoAvatar(name: 'Mary', radius: 14)),
-          const Positioned(
-              left: 36, child: AjoAvatar(name: 'David', radius: 14)),
-          Positioned(
-            left: 58,
-            top: 4,
-            child: Text('+9',
+          if (hasShown)
+            for (var i = 0; i < shown.length; i++)
+              Positioned(
+                left: i * 18.0,
+                child: AjoAvatar(
+                  name: shown[i].name,
+                  avatarUrl: shown[i].avatarUrl,
+                  radius: 14,
+                ),
+              )
+          else if (placeholderCount > 0)
+            const Positioned(
+              left: 0,
+              child: AjoAvatar(name: 'A', radius: 14),
+            ),
+          if (remainder > 0)
+            Positioned(
+              left: avatarCount * 18.0 + 4,
+              top: 4,
+              child: Text(
+                '+$remainder',
                 style: Theme.of(context)
                     .textTheme
                     .labelMedium
-                    ?.copyWith(color: AppColors.text)),
-          ),
+                    ?.copyWith(color: AppColors.text),
+              ),
+            ),
         ],
       ),
     );
