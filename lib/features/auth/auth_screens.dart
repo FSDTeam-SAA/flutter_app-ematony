@@ -94,7 +94,12 @@ class _LoginScreenState extends State<LoginScreen> {
               final ok = await ctrl.login(email: email, password: pass);
               if (!mounted) return;
               if (ok) {
-                context.go('/home');
+                // Let the router redirect decide: home for verified, /onboarding for new users
+                if (ctrl.isKycVerified) {
+                  context.go('/home');
+                } else {
+                  context.go('/onboarding');
+                }
               } else {
                 _showError(context, ctrl.errorMessage ?? 'Unable to sign in.');
               }

@@ -4,7 +4,8 @@ import 'auth_models.dart';
 import 'auth_repository.dart';
 
 class AuthController extends ChangeNotifier {
-  AuthController({required AuthRepository repository}) : _repository = repository;
+  AuthController({required AuthRepository repository})
+      : _repository = repository;
 
   final AuthRepository _repository;
 
@@ -16,10 +17,17 @@ class AuthController extends ChangeNotifier {
   bool get isAuthenticated => currentUser != null;
   bool get isKycVerified => currentUser?.kycVerified ?? false;
 
+  /// Called once at app start. Restores session from local storage,
+  /// then refreshes the user profile from the server if reachable.
   Future<void> bootstrap() async {
-    currentUser = await _repository.restoreUser();
-    isReady = true;
-    notifyListeners();
+    try {
+      currentUser = await _repository.restoreUser();
+    } catch (_) {
+      currentUser = null;
+    } finally {
+      isReady = true;
+      notifyListeners();
+    }
   }
 
   Future<bool> login({
@@ -27,7 +35,8 @@ class AuthController extends ChangeNotifier {
     required String password,
   }) async {
     return _runGuarded(() async {
-      final session = await _repository.login(email: email, password: password);
+      final session =
+          await _repository.login(email: email, password: password);
       currentUser = session.user;
     });
   }
@@ -72,10 +81,13 @@ class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     isBusy = true;
     notifyListeners();
-    await _repository.logout();
-    currentUser = null;
-    isBusy = false;
-    notifyListeners();
+    try {
+      await _repository.logout();
+    } finally {
+      currentUser = null;
+      isBusy = false;
+      notifyListeners();
+    }
   }
 
   Future<void> updateProfile(AppUser updated) async {
@@ -86,17 +98,12 @@ class AuthController extends ChangeNotifier {
 
   Future<void> markKycVerified() async {
     if (currentUser == null) return;
-    currentUser = AppUser(
-      id: currentUser!.id,
-      name: currentUser!.name,
-      email: currentUser!.email,
-      role: currentUser!.role,
-      phone: currentUser!.phone,
-      kycVerified: true,
-    );
+    currentUser = currentUser!.copyWith(kycVerified: true);
     await _repository.updateUser(currentUser!);
     notifyListeners();
   }
+
+  // ── Private helpers ──────────────────────────────────────────────────────
 
   Future<bool> _runGuarded(Future<void> Function() task) async {
     isBusy = true;
@@ -107,11 +114,17 @@ class AuthController extends ChangeNotifier {
       await task();
       return true;
     } catch (error) {
-      errorMessage = error.toString();
+      errorMessage = _friendlyMessage(error.toString());
       return false;
     } finally {
       isBusy = false;
       notifyListeners();
     }
+  }
+
+  /// Strips the leading "Exception: " prefix Dart appends when re-throwing.
+  String _friendlyMessage(String raw) {
+    if (raw.startsWith('Exception: ')) return raw.substring(11);
+    return raw;
   }
 }

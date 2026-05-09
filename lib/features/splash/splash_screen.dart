@@ -27,17 +27,28 @@ class _SplashScreenState extends State<SplashScreen>
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeIn);
     _animCtrl.forward();
 
-    Future<void>.delayed(const Duration(seconds: 3), () {
+    Future<void>.delayed(const Duration(milliseconds: 1800), () {
       if (!mounted) return;
-      final auth = context.read<AuthController>();
-      if (auth.isAuthenticated && !auth.isKycVerified) {
-        context.go('/kyc');
-      } else if (auth.isAuthenticated) {
-        context.go('/home');
-      } else {
-        context.go('/onboarding');
-      }
+      _routeAfterAuth();
     });
+  }
+
+  void _routeAfterAuth() {
+    final auth = context.read<AuthController>();
+    if (!auth.isReady) {
+      // Bootstrap still running — wait and retry
+      Future<void>.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _routeAfterAuth();
+      });
+      return;
+    }
+    if (auth.isAuthenticated && !auth.isKycVerified) {
+      context.go('/kyc');
+    } else if (auth.isAuthenticated) {
+      context.go('/home');
+    } else {
+      context.go('/onboarding');
+    }
   }
 
   @override

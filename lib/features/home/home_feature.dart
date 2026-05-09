@@ -252,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Positioned(
                       left: 16,
                       right: 16,
-                      bottom: -200,
+                      bottom: -120,
                       child: AjoCard(
                         color: const Color(0xFFF9F1DF),
                         borderColor: const Color(0xFFF0E1BE),
