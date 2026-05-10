@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/group_model.dart';
 import '../../core/theme/app_colors.dart';
@@ -548,6 +549,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Map<String, dynamic> _detail = {};
   List<GroupMemberModel> _members = [];
   bool _loading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -556,18 +558,57 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final repo = context.read<GroupsRepository>();
-    final results = await Future.wait([
-      repo.getGroupDetails(widget.groupId),
-      repo.getGroupMembers(widget.groupId),
-    ]);
-    if (!mounted) return;
     setState(() {
-      _detail = results[0] as Map<String, dynamic>;
-      _members = results[1] as List<GroupMemberModel>;
-      _loading = false;
+      _loading = true;
+      _loadError = null;
     });
+    final repo = context.read<GroupsRepository>();
+    try {
+      final results = await Future.wait([
+        repo.getGroupDetails(widget.groupId),
+        repo.getGroupMembers(widget.groupId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _detail = results[0] as Map<String, dynamic>;
+        _members = results[1] as List<GroupMemberModel>;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      final raw = e.toString();
+      final msg = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+      setState(() {
+        _loadError = msg;
+        _loading = false;
+      });
+    }
+  }
+
+  bool get _isAccessDenied =>
+      _loadError != null &&
+      _loadError!.toLowerCase().contains('do not have access');
+
+  Future<void> _shareInvite(BuildContext context) async {
+    final group = _detail['group'] as Map<String, dynamic>?;
+    final inviteCode = group?['inviteCode']?.toString() ?? '';
+    final groupName = group?['name']?.toString() ?? 'our savings group';
+
+    if (inviteCode.isEmpty) {
+      _showSnackBar(context, 'Invite code not available yet.');
+      return;
+    }
+
+    final text =
+        'Join "$groupName" on Ajo Family!\n\nUse this invite code to join:\n$inviteCode';
+
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.share(
+      text,
+      subject: 'Join $groupName on Ajo Family',
+      sharePositionOrigin:
+          box != null ? box.localToGlobal(Offset.zero) & box.size : null,
+    );
   }
 
   @override
@@ -589,7 +630,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
+                : _loadError != null
+                    ? _AccessDeniedView(
+                        message: _isAccessDenied
+                            ? "You do not have access to this group yet.\n\nThe group owner hasn't approved your join request. Once they accept it, you'll be able to view the group details here."
+                            : _loadError!,
+                        isAccessDenied: _isAccessDenied,
+                        onRetry: _load,
+                        onBack: () => context.pop(),
+                      )
+                    : RefreshIndicator(
                     onRefresh: _load,
                     child: ListView(
                       padding: const EdgeInsets.all(16),
@@ -701,10 +751,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                onPressed: () => _showSnackBar(
-                                  context,
-                                  'Share invite code with friends!',
-                                ),
+                                onPressed: () => _shareInvite(context),
                                 child: const Text('Invite Member'),
                               ),
                             ),
@@ -1402,4 +1449,102 @@ void _showSnackBar(BuildContext context, String message) {
         content: Text(message),
         backgroundColor: AppColors.primary),
   );
+}
+
+class _AccessDeniedView extends StatelessWidget {
+  const _AccessDeniedView({
+    required this.message,
+    required this.isAccessDenied,
+    required this.onRetry,
+    required this.onBack,
+  });
+
+  final String message;
+  final bool isAccessDenied;
+  final VoidCallback onRetry;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: (isAccessDenied
+                        ? AppColors.primary
+                        : AppColors.danger)
+                    .withAlpha(28),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isAccessDenied
+                    ? Icons.hourglass_top_rounded
+                    : Icons.error_outline_rounded,
+                color: isAccessDenied ? AppColors.primary : AppColors.danger,
+                size: 44,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              isAccessDenied
+                  ? 'Waiting for Approval'
+                  : 'Could not load group',
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.mutedText,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: onRetry,
+                child: const Text('Check Again'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  side: const BorderSide(color: AppColors.primary),
+                ),
+                onPressed: onBack,
+                child: const Text('Go Back'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

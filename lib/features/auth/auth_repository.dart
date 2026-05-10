@@ -5,20 +5,59 @@ import '../../core/storage/session_storage.dart';
 import 'auth_models.dart';
 
 String _extractErrorMessage(DioException e) {
+  // 1) Prefer backend-supplied message (e.g. "Password is not correct",
+  //    "User not found"). Try multiple common envelope shapes.
   try {
     final data = e.response?.data;
     if (data is Map) {
-      final msg = data['message']?.toString();
-      if (msg != null && msg.isNotEmpty) return msg;
+      final candidates = <dynamic>[
+        data['message'],
+        data['error'],
+        data['err'],
+        if (data['data'] is Map) (data['data'] as Map)['message'],
+        if (data['errors'] is List && (data['errors'] as List).isNotEmpty)
+          (data['errors'] as List).first,
+      ];
+      for (final c in candidates) {
+        if (c == null) continue;
+        final s = c is Map ? (c['message']?.toString() ?? '') : c.toString();
+        if (s.isNotEmpty) return s;
+      }
+    } else if (data is String && data.isNotEmpty) {
+      return data;
     }
   } catch (_) {}
+
+  // 2) Network-level failures.
   if (e.type == DioExceptionType.connectionTimeout ||
-      e.type == DioExceptionType.receiveTimeout) {
+      e.type == DioExceptionType.receiveTimeout ||
+      e.type == DioExceptionType.sendTimeout) {
     return 'Connection timed out. Check your internet.';
   }
   if (e.type == DioExceptionType.connectionError) {
-    return 'Cannot reach server. Check your internet.';
+    return 'Cannot reach server. Check your internet and try again.';
   }
+
+  // 3) HTTP status fallbacks when backend didn't include a message.
+  switch (e.response?.statusCode) {
+    case 400:
+      return 'Invalid request. Please check your details.';
+    case 401:
+      return 'Invalid email or password.';
+    case 403:
+      return 'You do not have permission to do this.';
+    case 404:
+      return 'User not found.';
+    case 409:
+      return 'An account with these details already exists.';
+    case 422:
+      return 'Some details are invalid. Please check and try again.';
+    case 500:
+    case 502:
+    case 503:
+      return 'Server error. Please try again shortly.';
+  }
+
   return 'Something went wrong. Please try again.';
 }
 
@@ -173,4 +212,8 @@ class AuthRepository {
   Future<void> updateUser(AppUser user) async {
     await _sessionStorage.saveUser(user.toJson());
   }
+
+  Future<bool> hasSeenOnboarding() => _sessionStorage.readOnboardingSeen();
+
+  Future<void> markOnboardingSeen() => _sessionStorage.setOnboardingSeen();
 }

@@ -291,7 +291,10 @@ class _LastPage extends StatelessWidget {
                           width: double.infinity,
                           height: 54,
                           child: FilledButton(
-                            onPressed: () => context.go('/kyc/personal-info'),
+                            onPressed: () {
+                              context.read<AuthController>().markOnboardingSeen();
+                              context.go('/kyc/personal-info');
+                            },
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF1F7867),
                               shape: RoundedRectangleBorder(
@@ -322,7 +325,10 @@ class _LastPage extends StatelessWidget {
                           width: double.infinity,
                           height: 54,
                           child: FilledButton(
-                            onPressed: () => context.go('/signup'),
+                            onPressed: () {
+                              context.read<AuthController>().markOnboardingSeen();
+                              context.go('/signup');
+                            },
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF1F7867),
                               shape: RoundedRectangleBorder(
@@ -354,7 +360,10 @@ class _LastPage extends StatelessWidget {
                           width: double.infinity,
                           height: 50,
                           child: OutlinedButton(
-                            onPressed: () => context.go('/login'),
+                            onPressed: () {
+                              context.read<AuthController>().markOnboardingSeen();
+                              context.go('/login');
+                            },
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.white,
                               side: BorderSide(

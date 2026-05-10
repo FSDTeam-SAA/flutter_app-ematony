@@ -9,6 +9,7 @@ class SessionStorage {
   static const _accessTokenKey = 'ajo_access_token';
   static const _refreshTokenKey = 'ajo_refresh_token';
   static const _userKey = 'ajo_user';
+  static const _onboardingSeenKey = 'ajo_onboarding_seen';
 
   // ── Write ────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,18 @@ class SessionStorage {
     } catch (_) {
       return null;
     }
+  }
+
+  // ── Onboarding flag ──────────────────────────────────────────────────────
+
+  Future<bool> readOnboardingSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_onboardingSeenKey) ?? false;
+  }
+
+  Future<void> setOnboardingSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingSeenKey, true);
   }
 
   // ── Delete ───────────────────────────────────────────────────────────────

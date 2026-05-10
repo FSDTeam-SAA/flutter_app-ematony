@@ -12,6 +12,7 @@ class AuthController extends ChangeNotifier {
   AppUser? currentUser;
   bool isBusy = false;
   bool isReady = false;
+  bool hasSeenOnboarding = false;
   String? errorMessage;
 
   bool get isAuthenticated => currentUser != null;
@@ -21,11 +22,17 @@ class AuthController extends ChangeNotifier {
   /// splash duration for a professional, smooth experience.
   Future<void> bootstrap() async {
     final startTime = DateTime.now();
-    
+
     try {
       currentUser = await _repository.restoreUser();
     } catch (_) {
       currentUser = null;
+    }
+
+    try {
+      hasSeenOnboarding = await _repository.hasSeenOnboarding();
+    } catch (_) {
+      hasSeenOnboarding = false;
     }
 
     // Ensure splash stays visible for at least 2 seconds for branding
@@ -36,6 +43,19 @@ class AuthController extends ChangeNotifier {
     }
 
     isReady = true;
+    notifyListeners();
+  }
+
+  void clearError() {
+    if (errorMessage == null) return;
+    errorMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> markOnboardingSeen() async {
+    if (hasSeenOnboarding) return;
+    hasSeenOnboarding = true;
+    await _repository.markOnboardingSeen();
     notifyListeners();
   }
 

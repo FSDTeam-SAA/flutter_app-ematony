@@ -17,9 +17,19 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailCtrl = TextEditingController(text: '');
-  final _passCtrl = TextEditingController(text: '');
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _passCtrl;
+  String _emailValue = '';
+  String _passwordValue = '';
   bool _obscure = true;
+  String? _localError;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl = TextEditingController(text: _emailValue);
+    _passCtrl = TextEditingController(text: _passwordValue);
+  }
 
   @override
   void dispose() {
@@ -31,6 +41,23 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<AuthController>();
+    final visibleError = _localError ?? controller.errorMessage;
+
+    // Defensive: if anything (autofill, IME, hot-reload) wipes the controllers
+    // but our state strings still hold the typed values, restore them so the
+    // user's input never visually disappears after a failed login.
+    if (_emailCtrl.text != _emailValue) {
+      _emailCtrl.value = TextEditingValue(
+        text: _emailValue,
+        selection: TextSelection.collapsed(offset: _emailValue.length),
+      );
+    }
+    if (_passCtrl.text != _passwordValue) {
+      _passCtrl.value = TextEditingValue(
+        text: _passwordValue,
+        selection: TextSelection.collapsed(offset: _passwordValue.length),
+      );
+    }
 
     return AuthScaffold(
       child: Column(
@@ -40,11 +67,20 @@ class _LoginScreenState extends State<LoginScreen> {
             subtitle: 'Sign in to continue Ajo Family',
           ),
           const SizedBox(height: 32),
+          if (visibleError != null) ...[
+            _ErrorBanner(message: visibleError),
+            const SizedBox(height: 16),
+          ],
           LabeledTextField(
             label: 'Email',
             controller: _emailCtrl,
             hintText: 'Enter your email address',
             keyboardType: TextInputType.emailAddress,
+            onChanged: (v) {
+              _emailValue = v;
+              if (_localError != null) setState(() => _localError = null);
+              context.read<AuthController>().clearError();
+            },
           ),
           const SizedBox(height: 20),
           LabeledTextField(
@@ -52,6 +88,11 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _passCtrl,
             hintText: 'Enter your password',
             obscureText: _obscure,
+            onChanged: (v) {
+              _passwordValue = v;
+              if (_localError != null) setState(() => _localError = null);
+              context.read<AuthController>().clearError();
+            },
             suffixIcon: IconButton(
               onPressed: () => setState(() => _obscure = !_obscure),
               icon: Icon(
@@ -77,14 +118,16 @@ class _LoginScreenState extends State<LoginScreen> {
               final email = _emailCtrl.text.trim();
               final pass = _passCtrl.text;
               if (email.isEmpty || pass.isEmpty) {
-                showError(context, 'Please enter email and password.');
+                controller.clearError();
+                setState(() => _localError = 'Please enter email and password.');
                 return;
               }
+              setState(() => _localError = null);
               final ok = await controller.login(email: email, password: pass);
-              if (ok && mounted) {
-                // Navigation handled by router redirect
-              } else if (!ok && mounted) {
-                showError(context, controller.errorMessage ?? 'Invalid credentials.');
+              if (!mounted) return;
+              if (!ok) {
+                final msg = controller.errorMessage ?? 'Invalid email or password.';
+                showError(context, msg);
               }
             },
           ),
@@ -107,6 +150,43 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text('Sign Up'),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withAlpha(20),
+        border: Border.all(color: AppColors.danger.withAlpha(90)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),

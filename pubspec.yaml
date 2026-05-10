@@ -43,6 +43,8 @@ dependencies:
   image_picker: ^1.1.2
   flutter_stripe: ^11.5.0
   intl_phone_field: ^3.2.0
+  fluttertoast: ^8.2.8
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
@@ -54,6 +56,19 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logos/logo_flat.png"
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/logos/logo_flat.png"
+  windows:
+    generate: true
+    image_path: "assets/logos/logo_flat.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -32,7 +32,18 @@ class ApiClient {
         },
         onError: (error, handler) async {
           // ── Auto token refresh on 401 ──
-          if (error.response?.statusCode == 401) {
+          // Skip refresh for auth endpoints — a 401 from /auth/login means
+          // wrong credentials, NOT an expired token. Letting refresh run here
+          // would swallow the backend's "Password is not correct" message.
+          final path = error.requestOptions.path;
+          final isAuthEndpoint = path.contains('/auth/login') ||
+              path.contains('/auth/register') ||
+              path.contains('/auth/refresh') ||
+              path.contains('/auth/forgot-password') ||
+              path.contains('/auth/reset-password') ||
+              path.contains('/auth/verify-otp');
+
+          if (error.response?.statusCode == 401 && !isAuthEndpoint) {
             try {
               final refreshToken = await _sessionStorage.readRefreshToken();
               if (refreshToken != null && refreshToken.isNotEmpty) {

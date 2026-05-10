@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/payment_model.dart';
 import '../../core/theme/app_colors.dart';
@@ -124,7 +125,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             iconBg: AppColors.subtle,
                             iconColor: AppColors.primary,
                             label: 'Top Up',
-                            onTap: () => _showComingSoon(context, 'Top Up'),
+                            onTap: () => _showTopUpSheet(context),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -134,7 +135,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             iconBg: AppColors.dangerLight,
                             iconColor: AppColors.danger,
                             label: 'Withdraw',
-                            onTap: () => _showComingSoon(context, 'Withdraw'),
+                            onTap: () => _showWithdrawFlow(context),
                           ),
                         ),
                       ],
@@ -351,63 +352,86 @@ class _TransactionRow extends StatelessWidget {
   }
 }
 
-void _showComingSoon(BuildContext context, String feature) {
-  showModalBottomSheet<void>(
+Future<void> _showTopUpSheet(BuildContext context) async {
+  final amountCtrl = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+
+  final amount = await showModalBottomSheet<double>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (sheetContext) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+      return Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+        ),
+        child: Form(
+          key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.subtle,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.hourglass_top_rounded,
-                  color: AppColors.primary,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: 16),
               Text(
-                '$feature coming soon',
+                'Top Up Wallet',
                 style: Theme.of(sheetContext)
                     .textTheme
                     .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
-                "We're putting the finishing touches on this. Check back shortly.",
-                textAlign: TextAlign.center,
+                'Enter the amount to add to your wallet. Payment is processed securely by Stripe.',
                 style: Theme.of(sheetContext)
                     .textTheme
-                    .bodyLarge
+                    .bodyMedium
                     ?.copyWith(color: AppColors.mutedText),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: amountCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: '\$ ',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final value = double.tryParse(v?.trim() ?? '');
+                  if (value == null) return 'Enter a valid amount';
+                  if (value <= 0) return 'Amount must be greater than zero';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
               SizedBox(
-                width: double.infinity,
-                height: 48,
+                height: 50,
                 child: FilledButton(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryDark,
+                    backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text('Got it'),
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.of(sheetContext).pop(
+                        double.parse(amountCtrl.text.trim()),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    'Continue to Payment',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ],
@@ -416,4 +440,339 @@ void _showComingSoon(BuildContext context, String feature) {
       );
     },
   );
+
+  amountCtrl.dispose();
+  if (amount == null || !context.mounted) return;
+
+  final ctrl = context.read<WalletController>();
+  try {
+    final ok = await ctrl.topUp(amount: amount);
+    if (!context.mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Top-up of \$${amount.toStringAsFixed(2)} successful'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+    }
+  } catch (e) {
+    if (!context.mounted) return;
+    final raw = e.toString();
+    final msg = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+    );
+  }
+}
+
+// ─── Withdraw flow ───────────────────────────────────────────────────────────
+//
+// Flow:
+//   1. Refresh Stripe Connect status from backend.
+//   2. If user has not finished onboarding → present onboarding sheet
+//      (opens Stripe-hosted URL in external browser; on return, polls
+//      `/connect/status` to detect completion).
+//   3. If onboarded + payouts enabled → present withdraw amount sheet,
+//      submit, refresh transactions.
+
+Future<void> _showWithdrawFlow(BuildContext context) async {
+  final ctrl = context.read<WalletController>();
+  final messenger = ScaffoldMessenger.of(context);
+
+  Map<String, dynamic> status;
+  try {
+    status = await ctrl.refreshConnectStatus();
+  } catch (e) {
+    if (!context.mounted) return;
+    final raw = e.toString();
+    final msg = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+    messenger.showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+    );
+    return;
+  }
+  if (!context.mounted) return;
+
+  final payoutsEnabled = status['payoutsEnabled'] == true;
+  if (!payoutsEnabled) {
+    await _showOnboardingSheet(context);
+  } else {
+    await _showWithdrawAmountSheet(context);
+  }
+}
+
+Future<void> _showOnboardingSheet(BuildContext context) async {
+  final ctrl = context.read<WalletController>();
+
+  // Sheet returns true when status now shows payouts enabled, so the caller
+  // knows to open the amount sheet AFTER this one is fully dismissed.
+  final shouldOpenAmount = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      bool busy = false;
+      return StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final messenger = ScaffoldMessenger.of(sheetContext);
+
+          Future<void> handleSetup() async {
+            setSheetState(() => busy = true);
+            try {
+              final url = await ctrl.getOnboardingUrl();
+              final ok = await launchUrl(
+                Uri.parse(url),
+                mode: LaunchMode.externalApplication,
+              );
+              if (!ok) {
+                throw Exception('Could not open the onboarding link');
+              }
+            } catch (e) {
+              final raw = e.toString();
+              final msg =
+                  raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+              messenger.showSnackBar(
+                SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+              );
+            } finally {
+              if (sheetContext.mounted) setSheetState(() => busy = false);
+            }
+          }
+
+          Future<void> handleCheck() async {
+            setSheetState(() => busy = true);
+            try {
+              final s = await ctrl.refreshConnectStatus();
+              if (!sheetContext.mounted) return;
+              if (s['payoutsEnabled'] == true) {
+                Navigator.of(sheetContext).pop(true);
+              } else {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "Onboarding isn't complete yet. Finish all required steps in the Stripe page.",
+                    ),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            } catch (e) {
+              final raw = e.toString();
+              final msg =
+                  raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+              messenger.showSnackBar(
+                SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+              );
+            } finally {
+              if (sheetContext.mounted) setSheetState(() => busy = false);
+            }
+          }
+
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: const BoxDecoration(
+                    color: AppColors.subtle,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_outlined,
+                    color: AppColors.primary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Set up Stripe payouts',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Before you can withdraw, Stripe needs your bank or debit-card details. You'll be redirected to a secure Stripe page to complete onboarding.",
+                  textAlign: TextAlign.center,
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.mutedText, height: 1.5),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: busy ? null : handleSetup,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: busy
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Open Stripe Onboarding',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : handleCheck,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text("I've finished — check status"),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  // The onboarding sheet has fully closed before we get here, so it's safe
+  // to open the next sheet without context conflicts.
+  if (shouldOpenAmount == true && context.mounted) {
+    await _showWithdrawAmountSheet(context);
+  }
+}
+
+Future<void> _showWithdrawAmountSheet(BuildContext context) async {
+  final amountCtrl = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+
+  final amount = await showModalBottomSheet<double>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      return Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Withdraw to bank',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Funds are sent to the bank account you connected with Stripe. Payout timing follows your Stripe schedule.',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.mutedText),
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: amountCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: '\$ ',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final value = double.tryParse(v?.trim() ?? '');
+                  if (value == null) return 'Enter a valid amount';
+                  if (value <= 0) return 'Amount must be greater than zero';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                height: 50,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.of(sheetContext).pop(
+                        double.parse(amountCtrl.text.trim()),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    'Withdraw',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+
+  amountCtrl.dispose();
+  if (amount == null || !context.mounted) return;
+
+  final ctrl = context.read<WalletController>();
+  try {
+    await ctrl.withdraw(amount: amount);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Withdrawal of \$${amount.toStringAsFixed(2)} sent'),
+        backgroundColor: AppColors.primary,
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    final raw = e.toString();
+    final msg = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+    );
+  }
 }

@@ -6,6 +6,7 @@ import '../../core/models/group_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/ajo_chrome.dart';
 import '../auth/auth_controller.dart';
+import '../notifications/notifications_controller.dart';
 import '../wheel/wheel_controller.dart';
 import 'home_controller.dart';
 
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeController>().load();
+      context.read<NotificationsController>().load();
     });
   }
 
@@ -31,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthController>().currentUser;
     final homeCtrl = context.watch<HomeController>();
+    final unreadCount = context.watch<NotificationsController>().unreadCount;
     final userName = user?.name.isNotEmpty == true ? user!.name : 'Ematony';
 
     final firstGroup = homeCtrl.groups.isNotEmpty
@@ -92,7 +95,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             GestureDetector(
-                              onTap: () => context.push('/notifications'),
+                              onTap: () async {
+                                await context.push('/notifications');
+                                if (!context.mounted) return;
+                                context.read<NotificationsController>().load();
+                              },
                               child: Stack(
                                 clipBehavior: Clip.none,
                                 children: [
@@ -109,39 +116,46 @@ class _HomeScreenState extends State<HomeScreen> {
                                       size: 22,
                                     ),
                                   ),
-                                  Positioned(
-                                    right: -1,
-                                    top: -1,
-                                    child: Container(
-                                      width: 18,
-                                      height: 18,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE53935),
-                                        borderRadius: BorderRadius.circular(
-                                          9,
+                                  if (unreadCount > 0)
+                                    Positioned(
+                                      right: -1,
+                                      top: -1,
+                                      child: Container(
+                                        constraints: const BoxConstraints(
+                                          minWidth: 18,
+                                          minHeight: 18,
                                         ),
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 2,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
                                         ),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: const Text(
-                                        '2',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE53935),
+                                          borderRadius:
+                                              BorderRadius.circular(9),
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          unreadCount > 99
+                                              ? '99+'
+                                              : unreadCount.toString(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 40),
                         Center(
                           child: Column(
                             children: [

@@ -91,6 +91,65 @@ class WalletRepository {
     }
   }
 
+  /// Step 1 of Stripe top-up. Backend creates Customer + Ephemeral Key +
+  /// PaymentIntent and returns everything PaymentSheet needs.
+  Future<Map<String, dynamic>> createStripeTopupSheet({
+    required double amount,
+    String? currency,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/payment/me/topup/sheet',
+        data: {
+          'amount': amount,
+          if (currency != null && currency.isNotEmpty) 'currency': currency,
+        },
+      );
+      return response.data?['data'] as Map<String, dynamic>? ?? {};
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
+  /// Step 3 of Stripe top-up. After PaymentSheet succeeds, ask the backend
+  /// to verify with Stripe and credit the wallet. Idempotent.
+  Future<void> confirmStripeTopup({required String paymentIntentId}) async {
+    try {
+      await _apiClient.dio.post('/payment/me/topup/confirm', data: {
+        'paymentIntentId': paymentIntentId,
+      });
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
+  // ── Stripe Connect (withdrawals) ───────────────────────────────────────
+
+  /// Returns `{ url, expiresAt, accountId }` — open `url` in an external
+  /// browser to let the user complete Stripe-hosted onboarding.
+  Future<Map<String, dynamic>> getStripeOnboardingLink() async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/connect/onboarding',
+      );
+      return response.data?['data'] as Map<String, dynamic>? ?? {};
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
+  /// Returns `{ connected, payoutsEnabled, detailsSubmitted, requirements? }`.
+  Future<Map<String, dynamic>> getStripeConnectStatus() async {
+    try {
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/connect/status',
+      );
+      return response.data?['data'] as Map<String, dynamic>? ?? {};
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
   Future<void> recordContribution({
     required String groupId,
     required double amount,

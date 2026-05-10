@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _agreeTerms = false;
   bool _obscurePass = true;
   bool _obscureConfirm = true;
+  late final TapGestureRecognizer _termsTap;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()
+      ..onTap = () => context.push('/terms');
+  }
 
   @override
   void dispose() {
@@ -35,6 +44,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _phoneCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
+    _termsTap.dispose();
     super.dispose();
   }
 
@@ -113,12 +123,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    'I agree to the Terms & Conditions and understand my account requires identity verification.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.mutedText,
-                          height: 1.5,
+                  child: Text.rich(
+                    TextSpan(
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.mutedText,
+                            height: 1.5,
+                          ),
+                      children: [
+                        const TextSpan(text: 'I agree to the '),
+                        TextSpan(
+                          text: 'Terms & Conditions',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
+                          recognizer: _termsTap,
                         ),
+                        const TextSpan(
+                          text:
+                              ' and understand my account requires identity verification.',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

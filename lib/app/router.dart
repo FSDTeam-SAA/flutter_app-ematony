@@ -42,6 +42,8 @@ class AppRouter {
           '/login',
           '/signup',
           '/forgot-password',
+          '/terms',
+          '/privacy',
         };
         // Routes accessible mid-password-reset flow (public but path-prefixed)
         final isPasswordResetRoute =
@@ -57,8 +59,18 @@ class AppRouter {
 
         // Leave the splash route as soon as bootstrap completes.
         if (loc == '/splash') {
-          if (!isAuthenticated) return '/login';
+          if (!isAuthenticated) {
+            return authController.hasSeenOnboarding ? '/login' : '/onboarding';
+          }
           return isVerified ? '/home' : '/onboarding';
+        }
+
+        // Block returning to onboarding once it's been seen and the user
+        // is unauthenticated — send them straight to login.
+        if (loc == '/onboarding' &&
+            !isAuthenticated &&
+            authController.hasSeenOnboarding) {
+          return '/login';
         }
 
         // ── Rule 1: Not logged in — send to login (except public routes) ──
@@ -111,6 +123,16 @@ class AppRouter {
         GoRoute(
           path: '/forgot-password',
           builder: (_, _) => const ForgotPasswordScreen(),
+        ),
+        // Public legal pages — accessible before login/signup so prospective
+        // users can read them before creating an account.
+        GoRoute(
+          path: '/terms',
+          builder: (_, _) => const TermsConditionsScreen(),
+        ),
+        GoRoute(
+          path: '/privacy',
+          builder: (_, _) => const PrivacyPolicyScreen(),
         ),
         GoRoute(
           path: '/verify-otp',
@@ -318,24 +340,29 @@ class _AuthRouterListenable extends ChangeNotifier {
     _lastIsAuthenticated = _authController.isAuthenticated;
     _lastIsReady = _authController.isReady;
     _lastIsVerified = _authController.isKycVerified;
+    _lastHasSeenOnboarding = _authController.hasSeenOnboarding;
   }
 
   final AuthController _authController;
   late bool _lastIsAuthenticated;
   late bool _lastIsReady;
   late bool _lastIsVerified;
+  late bool _lastHasSeenOnboarding;
 
   void _handleUpdate() {
     final newIsAuthenticated = _authController.isAuthenticated;
     final newIsReady = _authController.isReady;
     final newIsVerified = _authController.isKycVerified;
+    final newHasSeenOnboarding = _authController.hasSeenOnboarding;
 
     if (newIsAuthenticated != _lastIsAuthenticated ||
         newIsReady != _lastIsReady ||
-        newIsVerified != _lastIsVerified) {
+        newIsVerified != _lastIsVerified ||
+        newHasSeenOnboarding != _lastHasSeenOnboarding) {
       _lastIsAuthenticated = newIsAuthenticated;
       _lastIsReady = newIsReady;
       _lastIsVerified = newIsVerified;
+      _lastHasSeenOnboarding = newHasSeenOnboarding;
       notifyListeners();
     }
   }
