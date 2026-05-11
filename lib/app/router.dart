@@ -58,11 +58,16 @@ class AppRouter {
         final isVerified = authController.isKycVerified;
 
         // Leave the splash route as soon as bootstrap completes.
+        //
+        // Important: an authenticated-but-NOT-verified user that's restored
+        // from disk on cold start is treated as logged-out here. Bootstrap
+        // clears that session (see AuthController.bootstrap) so cold restarts
+        // always land on Login unless KYC was actually completed.
         if (loc == '/splash') {
           if (!isAuthenticated) {
             return authController.hasSeenOnboarding ? '/login' : '/onboarding';
           }
-          return isVerified ? '/home' : '/onboarding';
+          return isVerified ? '/home' : '/kyc';
         }
 
         // Block returning to onboarding once it's been seen and the user
@@ -79,13 +84,15 @@ class AppRouter {
         }
 
         // ── Rule 2: Logged in but not KYC verified ──
+        // Auth pages (/login, /signup) and the marketing onboarding screen
+        // shouldn't be shown to a user who is mid-KYC — bounce them to the
+        // KYC flow. They can still complete it from any /kyc/* route.
         if (isAuthenticated && !isVerified) {
-          // Allow KYC routes and onboarding
-          if (isKycRoute || loc == '/onboarding' || loc == '/splash') {
-            return null;
+          if (isKycRoute) return null;
+          if (loc == '/login' || loc == '/signup' || loc == '/onboarding') {
+            return '/kyc';
           }
-          // Block everything else — push to onboarding where they'll be told to verify
-          if (!isPublic) return '/onboarding';
+          if (!isPublic) return '/kyc';
         }
 
         // ── Rule 3: Logged in AND verified — redirect away from auth pages ──

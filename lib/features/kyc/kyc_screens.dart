@@ -832,7 +832,7 @@ class KycFaceCompleteScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Your selfie capture is complete. Submit your verification so our team can review your documents.',
+            'This was a demo verification only. To complete real identity verification, return and continue with Stripe Identity.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.mutedText,
                   height: 1.6,
@@ -841,8 +841,8 @@ class KycFaceCompleteScreen extends StatelessWidget {
           ),
           const Spacer(),
           PrimaryButton(
-            label: 'Submit Verification',
-            onPressed: () => context.push('/kyc/under-review'),
+            label: 'Back to Stripe Identity',
+            onPressed: () => context.go('/kyc/upload-id'),
           ),
         ],
       ),
@@ -898,9 +898,9 @@ class KycReviewScreen extends StatelessWidget {
           ),
           const Spacer(),
           PrimaryButton(
-            label: 'Waiting For Approval',
+            label: 'Back to Stripe Identity',
             color: AppColors.warning,
-            onPressed: () => context.push('/kyc/verified'),
+            onPressed: () => context.go('/kyc/upload-id'),
           ),
         ],
       ),

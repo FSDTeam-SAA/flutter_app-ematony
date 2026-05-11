@@ -182,8 +182,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 confirmPassword: confirm,
               );
               if (ok && mounted) {
-                showSuccess(context, 'Registration successful! Please sign in.');
-                context.go('/login');
+                // User is signed up AND authenticated. Send them into the
+                // KYC intro ("Verify Your Identity"); the router enforces
+                // this anyway via Rule 2 for unverified users.
+                showSuccess(context, 'Account created — please verify your identity.');
+                context.go('/kyc');
               } else if (!ok && mounted) {
                 showError(context, controller.errorMessage ?? 'Registration failed.');
               }

@@ -29,6 +29,20 @@ class AuthController extends ChangeNotifier {
       currentUser = null;
     }
 
+    // If the restored user never finished KYC, treat the saved session as
+    // invalid: clear it so the next launch routes them to Login. They have
+    // to log in again, at which point the router will send them straight
+    // to /kyc/personal-info to complete verification.
+    if (currentUser != null && !currentUser!.kycVerified) {
+      try {
+        await _repository.logout();
+      } catch (_) {
+        // Best-effort. The local clear in logout() runs even if the network
+        // request fails, so the session storage is wiped either way.
+      }
+      currentUser = null;
+    }
+
     try {
       hasSeenOnboarding = await _repository.hasSeenOnboarding();
     } catch (_) {
