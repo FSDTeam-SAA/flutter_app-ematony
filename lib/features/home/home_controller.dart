@@ -12,6 +12,9 @@ class HomeController extends ChangeNotifier {
 
   bool isLoading = false;
   List<GroupModel> groups = [];
+
+  List<GroupModel> get pendingPaymentGroups =>
+      groups.where((g) => g.hasPendingPayment).toList();
   List<PaymentModel> recentTransactions = [];
   List<WheelRotationItem> firstGroupRotations = [];
   DateTime? nextWheelDate;

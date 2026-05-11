@@ -36,9 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final unreadCount = context.watch<NotificationsController>().unreadCount;
     final userName = user?.name.isNotEmpty == true ? user!.name : 'Ematony';
 
-    final firstGroup = homeCtrl.groups.isNotEmpty
-        ? homeCtrl.groups.first
-        : null;
+    final pendingGroups = homeCtrl.pendingPaymentGroups;
+    final firstGroup = pendingGroups.isNotEmpty ? pendingGroups.first : null;
 
     return SafeArea(
       top: false,
@@ -181,6 +180,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
+                  if (firstGroup == null)
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: -120,
+                      child: _NoUpcomingPaymentCard(
+                        hasGroups: homeCtrl.groups.isNotEmpty,
+                      ),
+                    )
+                  else
                   Positioned(
                     left: 16,
                     right: 16,
@@ -218,8 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      firstGroup?.name ??
-                                          'Friends With Benefits - 2026',
+                                      firstGroup.name,
                                       style: Theme.of(context)
                                           .textTheme
                                           .headlineSmall
@@ -246,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            firstGroup?.formattedAmount ?? '₦1000.00',
+                            firstGroup.formattedAmount,
                             style: Theme.of(context)
                                 .textTheme
                                 .displaySmall
@@ -270,11 +278,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               SizedBox(
                                 height: 46,
                                 child: FilledButton(
-                                  onPressed: () => firstGroup != null
-                                      ? context.push(
-                                          '/groups/${firstGroup.id}',
-                                        )
-                                      : context.go('/wallet'),
+                                  onPressed: () => context.push(
+                                    '/groups/${firstGroup.id}',
+                                  ),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: AppColors.primaryDark,
                                     padding: const EdgeInsets.symmetric(
@@ -641,6 +647,96 @@ class _MiniMemberCluster extends StatelessWidget {
                     ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoUpcomingPaymentCard extends StatelessWidget {
+  const _NoUpcomingPaymentCard({required this.hasGroups});
+
+  final bool hasGroups;
+
+  @override
+  Widget build(BuildContext context) {
+    return AjoCard(
+      color: const Color(0xFFF9F1DF),
+      borderColor: const Color(0xFFF0E1BE),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withAlpha(18),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upcoming Payment',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'No Upcoming Payments',
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDark.withAlpha(40),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.check_circle_outline,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            hasGroups
+                ? "You're all caught up. No pending group payments right now."
+                : "You don't have any pending group payments yet.\nCreate or join a group to see upcoming payments here.",
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.mutedText,
+                  height: 1.5,
+                ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: FilledButton(
+              onPressed: () => context.go('/groups'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryDark,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(hasGroups ? 'View Groups' : 'Create or Join Group'),
+            ),
+          ),
         ],
       ),
     );

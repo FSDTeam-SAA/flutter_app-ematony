@@ -11,6 +11,7 @@ class GroupModel {
   final DateTime? startDate;
   final DateTime? endDate;
   int membersCount;
+  final String paymentStatus;
 
   GroupModel({
     required this.id,
@@ -25,6 +26,7 @@ class GroupModel {
     this.startDate,
     this.endDate,
     this.membersCount = 1,
+    this.paymentStatus = 'pending',
   });
 
   factory GroupModel.fromJson(Map<String, dynamic> json) {
@@ -50,8 +52,11 @@ class GroupModel {
       membersCount: (json['membersCount'] as num?)?.toInt() ??
           (json['memberCount'] as num?)?.toInt() ??
           1,
+      paymentStatus: (json['paymentStatus'] ?? 'pending').toString(),
     );
   }
+
+  bool get hasPendingPayment => paymentStatus != 'paid';
 
   double get completionPercent {
     if (maxMembers <= 0) return 0;
