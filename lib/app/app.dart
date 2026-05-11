@@ -100,9 +100,14 @@ class EmatonyApp extends StatelessWidget {
               repository: ctx.read<NotificationsRepository>()),
         ),
       ],
+      // The router is created ONCE here. Auth-state changes flow into it via
+      // its own internal `refreshListenable`; using `watch` here would
+      // recreate the entire GoRouter on every AuthController notification
+      // and tear down any in-flight modal routes, which causes
+      // `_dependents.isEmpty` framework assertions.
       child: Builder(
         builder: (ctx) {
-          final authController = ctx.watch<AuthController>();
+          final authController = ctx.read<AuthController>();
           return MaterialApp.router(
             title: 'Ajo Family',
             debugShowCheckedModeBanner: false,

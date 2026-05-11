@@ -353,8 +353,12 @@ class _TransactionRow extends StatelessWidget {
 }
 
 Future<void> _showTopUpSheet(BuildContext context) async {
-  final amountCtrl = TextEditingController();
-  final formKey = GlobalKey<FormState>();
+  // Capture every context-derived reference RIGHT NOW, while the wallet
+  // screen is in a stable build. We deliberately never touch `context`
+  // again after this point so PaymentSheet teardown can't race with the
+  // wallet screen's pending rebuilds.
+  final ctrl = context.read<WalletController>();
+  final messenger = ScaffoldMessenger.of(context);
 
   final amount = await showModalBottomSheet<double>(
     context: context,
@@ -363,93 +367,24 @@ Future<void> _showTopUpSheet(BuildContext context) async {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (sheetContext) {
-      return Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-        ),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Top Up Wallet',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Enter the amount to add to your wallet. Payment is processed securely by Stripe.',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.mutedText),
-              ),
-              const SizedBox(height: 18),
-              TextFormField(
-                controller: amountCtrl,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  prefixText: '\$ ',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  final value = double.tryParse(v?.trim() ?? '');
-                  if (value == null) return 'Enter a valid amount';
-                  if (value <= 0) return 'Amount must be greater than zero';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                height: 50,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      Navigator.of(sheetContext).pop(
-                        double.parse(amountCtrl.text.trim()),
-                      );
-                    }
-                  },
-                  child: const Text(
-                    'Continue to Payment',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
+    builder: (_) => const _AmountInputSheet(
+      title: 'Top Up Wallet',
+      subtitle:
+          'Enter the amount to add to your wallet. Payment is processed securely by Stripe.',
+      submitLabel: 'Continue to Payment',
+    ),
   );
 
-  amountCtrl.dispose();
-  if (amount == null || !context.mounted) return;
+  if (amount == null) return;
 
-  final ctrl = context.read<WalletController>();
+  // Wait one frame so the modal sheet's element is fully unmounted before
+  // we kick off the Stripe PaymentSheet native flow.
+  await Future.delayed(Duration.zero);
+
   try {
     final ok = await ctrl.topUp(amount: amount);
-    if (!context.mounted) return;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Top-up of \$${amount.toStringAsFixed(2)} successful'),
           backgroundColor: AppColors.primary,
@@ -457,11 +392,121 @@ Future<void> _showTopUpSheet(BuildContext context) async {
       );
     }
   } catch (e) {
-    if (!context.mounted) return;
     final raw = e.toString();
     final msg = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
+    );
+  }
+}
+
+/// Bottom sheet body that collects a positive numeric amount. Lives in its
+/// own StatefulWidget so its TextEditingController is disposed only when the
+/// widget is actually unmounted (after the sheet's exit animation). Disposing
+/// the controller too early — e.g. immediately after Navigator.pop — causes
+/// "TextEditingController used after being disposed" mid-animation, which
+/// cascades into a `_dependents.isEmpty` framework crash.
+class _AmountInputSheet extends StatefulWidget {
+  const _AmountInputSheet({
+    required this.title,
+    required this.subtitle,
+    required this.submitLabel,
+    this.submitColor,
+  });
+
+  final String title;
+  final String subtitle;
+  final String submitLabel;
+  final Color? submitColor;
+
+  @override
+  State<_AmountInputSheet> createState() => _AmountInputSheetState();
+}
+
+class _AmountInputSheetState extends State<_AmountInputSheet> {
+  final _amountCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.subtitle,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.mutedText),
+            ),
+            const SizedBox(height: 18),
+            TextFormField(
+              controller: _amountCtrl,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                prefixText: '\$ ',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                final value = double.tryParse(v?.trim() ?? '');
+                if (value == null) return 'Enter a valid amount';
+                if (value <= 0) return 'Amount must be greater than zero';
+                return null;
+              },
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 50,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: widget.submitColor ?? AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () {
+                  if (_formKey.currentState!.validate()) {
+                    Navigator.of(context).pop(
+                      double.parse(_amountCtrl.text.trim()),
+                    );
+                  }
+                },
+                child: Text(
+                  widget.submitLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -666,8 +711,9 @@ Future<void> _showOnboardingSheet(BuildContext context) async {
 }
 
 Future<void> _showWithdrawAmountSheet(BuildContext context) async {
-  final amountCtrl = TextEditingController();
-  final formKey = GlobalKey<FormState>();
+  // Capture refs before the await — same reason as the top-up sheet.
+  final ctrl = context.read<WalletController>();
+  final messenger = ScaffoldMessenger.of(context);
 
   final amount = await showModalBottomSheet<double>(
     context: context,
@@ -676,102 +722,30 @@ Future<void> _showWithdrawAmountSheet(BuildContext context) async {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (sheetContext) {
-      return Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-        ),
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Withdraw to bank',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Funds are sent to the bank account you connected with Stripe. Payout timing follows your Stripe schedule.',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: AppColors.mutedText),
-              ),
-              const SizedBox(height: 18),
-              TextFormField(
-                controller: amountCtrl,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  prefixText: '\$ ',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  final value = double.tryParse(v?.trim() ?? '');
-                  if (value == null) return 'Enter a valid amount';
-                  if (value <= 0) return 'Amount must be greater than zero';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                height: 50,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.danger,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      Navigator.of(sheetContext).pop(
-                        double.parse(amountCtrl.text.trim()),
-                      );
-                    }
-                  },
-                  child: const Text(
-                    'Withdraw',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
+    builder: (_) => const _AmountInputSheet(
+      title: 'Withdraw to bank',
+      subtitle:
+          'Funds are sent to the bank account you connected with Stripe. Payout timing follows your Stripe schedule.',
+      submitLabel: 'Withdraw',
+      submitColor: AppColors.danger,
+    ),
   );
 
-  amountCtrl.dispose();
-  if (amount == null || !context.mounted) return;
+  if (amount == null) return;
+  await Future.delayed(Duration.zero);
 
-  final ctrl = context.read<WalletController>();
   try {
     await ctrl.withdraw(amount: amount);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Text('Withdrawal of \$${amount.toStringAsFixed(2)} sent'),
         backgroundColor: AppColors.primary,
       ),
     );
   } catch (e) {
-    if (!context.mounted) return;
     final raw = e.toString();
     final msg = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: AppColors.danger),
     );
   }

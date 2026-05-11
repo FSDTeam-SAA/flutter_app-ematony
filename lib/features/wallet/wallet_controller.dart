@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import '../../core/config/stripe_config.dart';
 import '../../core/models/payment_model.dart';
 import 'wallet_repository.dart';
 
@@ -64,8 +65,10 @@ class WalletController extends ChangeNotifier {
     if (isTopUpInProgress) return false;
     if (amount <= 0) throw Exception('Amount must be greater than zero');
 
+    // Set the flag but DON'T notifyListeners here — no widget consumes this
+    // flag, and notifying mid-tap-handler while the bottom-sheet route is
+    // being unmounted causes a `_dependents.isEmpty` framework assertion.
     isTopUpInProgress = true;
-    notifyListeners();
     try {
       // 1) Ask backend for PaymentSheet config.
       final sheet = await _repository.createStripeTopupSheet(
@@ -76,26 +79,21 @@ class WalletController extends ChangeNotifier {
       final clientSecret = sheet['paymentIntent']?.toString();
       final ephemeralKey = sheet['ephemeralKey']?.toString();
       final customer = sheet['customer']?.toString();
-      final publishableKey = sheet['publishableKey']?.toString();
       final paymentIntentId = sheet['paymentIntentId']?.toString();
 
       if (clientSecret == null || clientSecret.isEmpty) {
         throw Exception('Backend did not return a paymentIntent client secret');
       }
-      if (publishableKey == null || publishableKey.isEmpty) {
-        throw Exception(
-          'Stripe publishable key missing on the server. '
-          'Set STRIPE_PUBLISHABLE_KEY in backend .env',
-        );
+
+      // Stripe is already initialized in main.dart with StripeConfig.publishableKey,
+      // so we don't touch Stripe.publishableKey or applySettings() here — doing so
+      // again mid-flow races with the wallet screen's pending rebuilds and triggers
+      // `_dependents.isEmpty` framework assertions on Android.
+      if (StripeConfig.publishableKey.isEmpty) {
+        throw Exception('No Stripe publishable key configured');
       }
 
-      // 2) Configure the Stripe SDK with the publishable key (safe to set
-      //    repeatedly; we set it on each top-up so a server-side key rotation
-      //    is picked up without restarting the app).
-      Stripe.publishableKey = publishableKey;
-      await Stripe.instance.applySettings();
-
-      // 3) Initialize and present the PaymentSheet.
+      // 2) Initialize and present the PaymentSheet.
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
@@ -113,8 +111,10 @@ class WalletController extends ChangeNotifier {
         await _repository.confirmStripeTopup(paymentIntentId: paymentIntentId);
       }
 
-      // 5) Refresh transactions so the new balance is visible.
-      await load();
+      // 5) Schedule the refresh on the next event-loop turn so notifyListeners
+      //    here doesn't fire while PaymentSheet's native route is still being
+      //    deactivated (causes a `_dependents.isEmpty` framework assertion).
+      Future.microtask(load);
       return true;
     } on StripeException catch (e) {
       // User cancelled → not an error to surface.
@@ -123,8 +123,10 @@ class WalletController extends ChangeNotifier {
       }
       throw Exception(e.error.localizedMessage ?? e.error.message ?? 'Payment failed');
     } finally {
+      // Reset the flag but don't notify — `load()` (scheduled above on
+      // success) will notify when the new transactions arrive. On failure
+      // the caller already surfaces a SnackBar so no notify is needed.
       isTopUpInProgress = false;
-      notifyListeners();
     }
   }
 
