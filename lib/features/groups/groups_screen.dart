@@ -767,7 +767,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         ),
                         const SizedBox(height: 12),
                         FilledButton(
-                          onPressed: () => context.push('/wheel'),
+                          onPressed: () async {
+                            await context
+                                .read<WheelController>()
+                                .openGroupById(widget.groupId);
+                            if (!context.mounted) return;
+                            context.go('/wheel');
+                          },
                           child: const Text('Open Wheel'),
                         ),
                         const SizedBox(height: 12),

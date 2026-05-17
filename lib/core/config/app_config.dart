@@ -11,8 +11,8 @@ class AppConfig {
     // On the Android emulator, host machine localhost is reachable at 10.0.2.2.
     // On iOS simulator / desktop / web, localhost works directly.
     if (!kIsWeb && Platform.isAndroid) {
-      return 'https://backend-ematony.onrender.com/api/v1';
+      return 'http://10.0.2.2:5000/api/v1';
     }
-    return 'https://backend-ematony.onrender.com/api/v1';
+    return 'http://localhost:5000/api/v1';
   }
 }

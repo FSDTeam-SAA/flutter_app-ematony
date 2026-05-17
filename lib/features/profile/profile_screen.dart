@@ -30,72 +30,33 @@ class ProfileScreen extends StatelessWidget {
       bottomNav: false,
       body: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 110),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AjoPatternHeader(
-                bottomRadius: 28,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 14),
-                      AjoAvatar(
-                        name: name,
-                        avatarUrl: user?.avatarUrl,
-                        radius: 54,
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        name,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        email,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(color: Colors.white.withAlpha(210)),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        phone,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(color: Colors.white.withAlpha(210)),
-                      ),
-                    ],
-                  ),
-                ),
+        child: CustomScrollView(
+          slivers: [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _ProfileHeaderDelegate(
+                name: name,
+                email: email,
+                phone: phone,
+                avatarUrl: user?.avatarUrl,
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
-                child: Text(
-                  'Account Settings',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 22, 16, 110),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'Account Settings',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontSize: 16,
+                            height: 1,
+                            color: AppColors.primaryDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 14),
                     _ProfileTile(
                       icon: Icons.person_outline_rounded,
                       label: 'Personal Info',
@@ -135,8 +96,8 @@ class ProfileScreen extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -449,6 +410,9 @@ class _PasswordSecurityScreenState extends State<PasswordSecurityScreen> {
   final _currentCtrl = TextEditingController();
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  bool _showCurrentPassword = false;
+  bool _showNewPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void dispose() {
@@ -471,21 +435,54 @@ class _PasswordSecurityScreenState extends State<PasswordSecurityScreen> {
             label: 'Current Password',
             controller: _currentCtrl,
             hintText: '**********',
-            obscureText: true,
+            obscureText: !_showCurrentPassword,
+            suffixIcon: IconButton(
+              onPressed: () => setState(
+                () => _showCurrentPassword = !_showCurrentPassword,
+              ),
+              icon: Icon(
+                _showCurrentPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: AppColors.mutedText,
+              ),
+            ),
           ),
           const SizedBox(height: 14),
           LabeledTextField(
             label: 'New Password',
             controller: _newCtrl,
             hintText: '**********',
-            obscureText: true,
+            obscureText: !_showNewPassword,
+            suffixIcon: IconButton(
+              onPressed: () => setState(
+                () => _showNewPassword = !_showNewPassword,
+              ),
+              icon: Icon(
+                _showNewPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: AppColors.mutedText,
+              ),
+            ),
           ),
           const SizedBox(height: 14),
           LabeledTextField(
             label: 'Confirm Password',
             controller: _confirmCtrl,
             hintText: '**********',
-            obscureText: true,
+            obscureText: !_showConfirmPassword,
+            suffixIcon: IconButton(
+              onPressed: () => setState(
+                () => _showConfirmPassword = !_showConfirmPassword,
+              ),
+              icon: Icon(
+                _showConfirmPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: AppColors.mutedText,
+              ),
+            ),
           ),
           if (ctrl.error != null)
             Padding(
@@ -676,6 +673,97 @@ class TermsConditionsScreen extends StatelessWidget {
 
 // ─── Private Widgets ──────────────────────────────────────────────────────────
 
+class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _ProfileHeaderDelegate({
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.avatarUrl,
+  });
+
+  final String name;
+  final String email;
+  final String phone;
+  final String? avatarUrl;
+
+  @override
+  double get minExtent => 244;
+
+  @override
+  double get maxExtent => 244;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final nameStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
+          fontSize: 18,
+          height: 1,
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        );
+    final metaStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+          fontSize: 16,
+          height: 1,
+          color: Colors.white.withAlpha(210),
+          fontWeight: FontWeight.w400,
+        );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        boxShadow: overlapsContent
+            ? [
+                BoxShadow(
+                  color: Colors.black.withAlpha(18),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : const [],
+      ),
+      child: AjoPatternHeader(
+        height: maxExtent,
+        bottomRadius: 28,
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.of(context).padding.top + 8,
+          16,
+          28,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              AjoAvatar(
+                name: name,
+                avatarUrl: avatarUrl,
+                radius: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(name, textAlign: TextAlign.center, style: nameStyle),
+              const SizedBox(height: 6),
+              Text(email, textAlign: TextAlign.center, style: metaStyle),
+              const SizedBox(height: 6),
+              Text(phone, textAlign: TextAlign.center, style: metaStyle),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _ProfileHeaderDelegate oldDelegate) {
+    return oldDelegate.name != name ||
+        oldDelegate.email != email ||
+        oldDelegate.phone != phone ||
+        oldDelegate.avatarUrl != avatarUrl;
+  }
+}
+
 class _ProfileTile extends StatelessWidget {
   const _ProfileTile({
     required this.icon,
@@ -714,10 +802,11 @@ class _ProfileTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w500),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontSize: 16,
+                      height: 1,
+                      fontWeight: FontWeight.w400,
+                    ),
               ),
             ),
             const Icon(Icons.chevron_right_rounded,

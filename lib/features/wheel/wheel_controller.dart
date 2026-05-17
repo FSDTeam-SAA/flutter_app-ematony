@@ -61,27 +61,31 @@ class WheelController extends ChangeNotifier {
   bool isOwner = false;
   Map<String, dynamic> spinWindow = const {};
 
-  Future<void> loadGroups() async {
+  Future<void> loadGroups({String? preferredGroupId}) async {
     if (isLoadingGroups) return;
     isLoadingGroups = true;
     error = null;
     notifyListeners();
     try {
       groups = await _repository.listMyGroups();
-      if (selectedGroup == null && groups.isNotEmpty) {
-        await _selectAndLoad(groups.first);
+      final target = _resolveSelectedGroup(preferredGroupId);
+      if (target == null) {
+        selectedGroup = null;
+        rotations = [];
+        totalMembers = 0;
+        currentMonthWinner = null;
+        lastWinner = null;
+        canSpin = false;
+        isOwner = false;
+        spinWindow = const {};
         return;
       }
-      if (selectedGroup != null) {
-        // refresh in case the cached selection no longer exists
-        final match = groups.firstWhere(
-          (g) => g.id == selectedGroup!.id,
-          orElse: () => groups.isNotEmpty ? groups.first : selectedGroup!,
-        );
-        if (match.id != selectedGroup!.id) {
-          await _selectAndLoad(match);
-          return;
-        }
+
+      final shouldReloadWheel =
+          selectedGroup?.id != target.id || rotations.isEmpty;
+      selectedGroup = target;
+      if (shouldReloadWheel) {
+        await _selectAndLoad(target);
       }
     } catch (e) {
       error = e.toString().replaceFirst('Exception: ', '');
@@ -91,9 +95,29 @@ class WheelController extends ChangeNotifier {
     }
   }
 
+  Future<void> openGroupById(String groupId) async {
+    await loadGroups(preferredGroupId: groupId);
+  }
+
   Future<void> selectGroup(GroupModel group) async {
     if (selectedGroup?.id == group.id) return;
     await _selectAndLoad(group);
+  }
+
+  GroupModel? _resolveSelectedGroup(String? preferredGroupId) {
+    if (groups.isEmpty) return null;
+    if (preferredGroupId != null) {
+      for (final group in groups) {
+        if (group.id == preferredGroupId) return group;
+      }
+    }
+    final currentId = selectedGroup?.id;
+    if (currentId != null) {
+      for (final group in groups) {
+        if (group.id == currentId) return group;
+      }
+    }
+    return groups.first;
   }
 
   Future<void> _selectAndLoad(GroupModel group) async {
