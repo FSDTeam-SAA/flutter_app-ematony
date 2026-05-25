@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/models/group_model.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/currency_utils.dart';
 import '../../core/widgets/ajo_chrome.dart';
 import '../../core/widgets/labeled_text_field.dart';
 import '../../core/widgets/primary_button.dart';
@@ -288,16 +289,32 @@ const _freqLabels = ['Weekly', 'Bi-Weekly', 'Monthly'];
 const _freqValues = ['weekly', 'biweekly', 'monthly'];
 // member display options (matching design: 3 min → 36 max)
 const _memberOptions = ['3', '6', '12', '24', '36'];
+const _currencyOptions = ['NGN', 'USD', 'GBP', 'EUR'];
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _nameController = TextEditingController(text: 'Family Savings 2026');
   String _frequencyLabel = 'Monthly';      // shown in dropdown
   final _amountController = TextEditingController(text: '1000.00');
   String _members = '12';
+  String _currencyCode = 'NGN';
   bool _autoPay = true;
 
   String get _frequencyValue =>
       _freqValues[_freqLabels.indexOf(_frequencyLabel)];
+
+  int get _reminderDays => _frequencyValue == 'monthly' ? 5 : 2;
+
+  String get _cycleDurationLabel {
+    final memberCount = int.tryParse(_members) ?? 0;
+    switch (_frequencyValue) {
+      case 'weekly':
+        return '$memberCount weeks';
+      case 'biweekly':
+        return '${memberCount * 2} weeks';
+      default:
+        return '$memberCount months';
+    }
+  }
 
   @override
   void dispose() {
@@ -338,6 +355,13 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   ),
                   const SizedBox(height: 14),
                   _LabeledDropdown(
+                    label: 'Currency',
+                    value: _currencyCode,
+                    items: _currencyOptions,
+                    onChanged: (v) => setState(() => _currencyCode = v!),
+                  ),
+                  const SizedBox(height: 14),
+                  _LabeledDropdown(
                     label: 'Number of Members',
                     value: _members,
                     items: _memberOptions,
@@ -351,7 +375,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   const SizedBox(height: 14),
                   _ReadOnlyField(
                     label: 'Cycle Duration',
-                    value: 'auto-calculated based on members',
+                    value: _cycleDurationLabel,
+                  ),
+                  const SizedBox(height: 14),
+                  _ReadOnlyField(
+                    label: 'Payment Reminder',
+                    value: '$_reminderDays days before due date',
                   ),
                   const SizedBox(height: 14),
                   _ReadOnlyField(
@@ -396,11 +425,38 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'You must enable automatic payments to create this group.',
+                          'If enabled, payments are deducted automatically. Members get 24 hours grace after due date before a 7.5% admin fee applies.',
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
                               ?.copyWith(color: AppColors.text),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  AjoCard(
+                    radius: 18,
+                    borderColor: const Color(0xFFF0E2C9),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Group Rules',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Groups support 3 to 36 members. Weekly and bi-weekly reminders go out 2 days early. Monthly reminders go out 5 days early.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'The owner starts at serial 0. The first cycle pays in join order. Later cycles can be randomized after a wheel spin.',
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
@@ -424,6 +480,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         amount: _amountController.text.trim(),
                         frequency: _frequencyValue,
                         maxMembers: _members,
+                        currencyCode: _currencyCode,
                         cycleDuration: _members,
                         autoPayments: _autoPay,
                       );
@@ -618,6 +675,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final groupName = group?['name']?.toString() ?? 'Group Details';
     final amount = (group?['contributionAmount'] as num?)?.toDouble() ?? 0;
     final totalPool = amount * (_members.isNotEmpty ? _members.length : 1);
+    final currencyCode = (group?['currencyCode'] ?? 'NGN').toString();
     final membersCount = (summary?['membersCount'] as num?)?.toInt() ??
         _members.length;
     final status = (group?['status'] ?? 'active').toString();
@@ -651,7 +709,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               _SummaryRow(label: 'Status', value: status.toUpperCase()),
                               _SummaryRow(
                                 label: 'Contribution Amount',
-                                value: '₦${amount.toStringAsFixed(2)}',
+                                value: formatCurrencyAmount(amount, currencyCode),
                               ),
                               _SummaryRow(
                                 label: 'Number of Members',
@@ -659,7 +717,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               ),
                               _SummaryRow(
                                 label: 'Total Pool',
-                                value: '₦${totalPool.toStringAsFixed(2)}',
+                                value: formatCurrencyAmount(totalPool, currencyCode),
                               ),
                               _SummaryRow(
                                 label: 'Frequency',
@@ -677,7 +735,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  '₦${amount.toStringAsFixed(2)}',
+                                  formatCurrencyAmount(amount, currencyCode),
                                   style: const TextStyle(
                                     color: AppColors.text,
                                     fontSize: 24,
@@ -1554,3 +1612,5 @@ class _AccessDeniedView extends StatelessWidget {
     );
   }
 }
+
+

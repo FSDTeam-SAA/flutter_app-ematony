@@ -1,3 +1,5 @@
+import '../utils/currency_utils.dart';
+
 class GroupModel {
   final String id;
   final String name;
@@ -8,6 +10,12 @@ class GroupModel {
   final int maxMembers;
   final String status;
   final String currencyCode;
+  final bool autoPaymentsEnabled;
+  final int reminderDaysBefore;
+  final int gracePeriodHours;
+  final double lateFeePercent;
+  final double adminPayoutPercent;
+  final String wheelMode;
   final DateTime? startDate;
   final DateTime? endDate;
   int membersCount;
@@ -19,10 +27,16 @@ class GroupModel {
     this.description = '',
     required this.inviteCode,
     required this.contributionAmount,
-    this.contributionFrequency = 'Monthly',
+    this.contributionFrequency = 'monthly',
     required this.maxMembers,
     this.status = 'active',
     this.currencyCode = 'NGN',
+    this.autoPaymentsEnabled = false,
+    this.reminderDaysBefore = 2,
+    this.gracePeriodHours = 24,
+    this.lateFeePercent = 7.5,
+    this.adminPayoutPercent = 1,
+    this.wheelMode = 'serial',
     this.startDate,
     this.endDate,
     this.membersCount = 1,
@@ -38,11 +52,18 @@ class GroupModel {
       contributionAmount:
           (json['contributionAmount'] as num?)?.toDouble() ?? 0.0,
       contributionFrequency:
-          (json['contributionFrequency'] ?? json['frequency'] ?? 'Monthly')
+          (json['contributionFrequency'] ?? json['frequency'] ?? 'monthly')
               .toString(),
       maxMembers: (json['maxMembers'] as num?)?.toInt() ?? 10,
       status: (json['status'] ?? 'active').toString(),
       currencyCode: (json['currencyCode'] ?? 'NGN').toString(),
+      autoPaymentsEnabled: json['autoPaymentsEnabled'] == true,
+      reminderDaysBefore: (json['reminderDaysBefore'] as num?)?.toInt() ?? 2,
+      gracePeriodHours: (json['gracePeriodHours'] as num?)?.toInt() ?? 24,
+      lateFeePercent: (json['lateFeePercent'] as num?)?.toDouble() ?? 7.5,
+      adminPayoutPercent:
+          (json['adminPayoutPercent'] as num?)?.toDouble() ?? 1.0,
+      wheelMode: (json['wheelMode'] ?? 'serial').toString(),
       startDate: json['startDate'] != null
           ? DateTime.tryParse(json['startDate'].toString())
           : null,
@@ -64,14 +85,18 @@ class GroupModel {
   }
 
   String get formattedAmount {
-    final symbol = currencyCode == 'USD' ? '\$' : '₦';
-    final formatted = contributionAmount
-        .toStringAsFixed(2)
-        .replaceAllMapped(
-          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '$symbol$formatted';
+    return formatCurrencyAmount(contributionAmount, currencyCode);
+  }
+
+  String get frequencyLabel {
+    switch (contributionFrequency.toLowerCase()) {
+      case 'weekly':
+        return 'Weekly';
+      case 'biweekly':
+        return 'Bi-Weekly';
+      default:
+        return 'Monthly';
+    }
   }
 }
 

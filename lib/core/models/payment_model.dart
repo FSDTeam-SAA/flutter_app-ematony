@@ -1,3 +1,5 @@
+import '../utils/currency_utils.dart';
+
 class PaymentModel {
   final String id;
   final double price;
@@ -5,6 +7,11 @@ class PaymentModel {
   final String paymentStatus;
   final DateTime createdAt;
   final String? transactionId;
+  final String currencyCode;
+  final double baseAmount;
+  final bool lateFeeApplied;
+  final double lateFeeAmount;
+  final double adminCreditAmount;
 
   PaymentModel({
     required this.id,
@@ -13,13 +20,23 @@ class PaymentModel {
     required this.paymentStatus,
     required this.createdAt,
     this.transactionId,
+    this.currencyCode = 'NGN',
+    this.baseAmount = 0,
+    this.lateFeeApplied = false,
+    this.lateFeeAmount = 0,
+    this.adminCreditAmount = 0,
   });
 
   bool get isTopUp =>
-      type == 'wallet_topup' || type == 'topup';
+      type == 'wallet_topup' ||
+      type == 'topup' ||
+      type == 'payout' ||
+      type == 'refund' ||
+      type == 'admin_commission' ||
+      type == 'late_fee_admin_credit';
 
   bool get isWithdraw =>
-      type == 'payout' || type == 'withdraw';
+      type == 'withdraw' || type == 'group_contribution';
 
   String get title {
     switch (type) {
@@ -27,10 +44,15 @@ class PaymentModel {
       case 'topup':
         return 'Top Up';
       case 'payout':
+        return 'Group Payout';
       case 'withdraw':
         return 'Withdraw';
       case 'group_contribution':
-        return 'Contribution';
+        return lateFeeApplied ? 'Contribution + Late Fee' : 'Contribution';
+      case 'late_fee_admin_credit':
+        return 'Late Fee Credit';
+      case 'admin_commission':
+        return 'Admin Commission';
       case 'refund':
         return 'Refund';
       case 'adjustment':
@@ -41,13 +63,7 @@ class PaymentModel {
   }
 
   String get formattedAmount {
-    final formatted = price
-        .toStringAsFixed(2)
-        .replaceAllMapped(
-          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '₦$formatted';
+    return formatCurrencyAmount(price, currencyCode);
   }
 
   String get timeAgo {
@@ -60,14 +76,40 @@ class PaymentModel {
 
   factory PaymentModel.fromJson(Map<String, dynamic> json) {
     final createdAtRaw = json['createdAt']?.toString() ?? '';
+    final priceRaw = json['price'] ?? json['amount'];
+    final price = priceRaw is num ? priceRaw.toDouble() : 0.0;
     return PaymentModel(
       id: (json['_id'] ?? json['id'] ?? '').toString(),
-      price: (json['price'] ?? json['amount'] as num?)?.toDouble() ?? 0.0,
+      price: price,
       type: (json['type'] ?? '').toString(),
       paymentStatus: (json['paymentStatus'] ?? json['status'] ?? '').toString(),
-      createdAt:
-          createdAtRaw.isNotEmpty ? DateTime.tryParse(createdAtRaw) ?? DateTime.now() : DateTime.now(),
+      createdAt: createdAtRaw.isNotEmpty
+          ? DateTime.tryParse(createdAtRaw) ?? DateTime.now()
+          : DateTime.now(),
       transactionId: json['transactionId']?.toString(),
+      currencyCode: (json['currencyCode'] ?? 'NGN').toString(),
+      baseAmount: (json['baseAmount'] as num?)?.toDouble() ?? 0,
+      lateFeeApplied: json['lateFeeApplied'] == true,
+      lateFeeAmount: (json['lateFeeAmount'] as num?)?.toDouble() ?? 0,
+      adminCreditAmount:
+          (json['adminCreditAmount'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  factory PaymentModel.fromWithdrawalJson(Map<String, dynamic> json) {
+    final createdAtRaw = (json['createdAt'] ?? json['requestedAt'] ?? '')
+        .toString();
+    final amountRaw = json['amount'] ?? json['price'];
+    final amount = amountRaw is num ? amountRaw.toDouble() : 0.0;
+    return PaymentModel(
+      id: (json['_id'] ?? json['id'] ?? '').toString(),
+      price: amount,
+      type: 'withdraw',
+      paymentStatus: (json['status'] ?? '').toString(),
+      createdAt: createdAtRaw.isNotEmpty
+          ? DateTime.tryParse(createdAtRaw) ?? DateTime.now()
+          : DateTime.now(),
+      currencyCode: (json['currencyCode'] ?? 'NGN').toString(),
     );
   }
 }

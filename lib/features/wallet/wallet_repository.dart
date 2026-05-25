@@ -72,11 +72,13 @@ class WalletRepository {
   Future<void> requestWithdrawal({
     required double amount,
     String? note,
+    String? currency,
   }) async {
     try {
       await _apiClient.dio.post('/payment/me/withdrawals', data: {
         'amount': amount,
         if (note != null && note.isNotEmpty) 'note': note,
+        if (currency != null && currency.isNotEmpty) 'currency': currency,
       });
     } on DioException catch (e) {
       throw Exception(_extractDioMessage(e));
@@ -91,9 +93,9 @@ class WalletRepository {
     }
   }
 
-  /// Step 1 of Stripe top-up. Backend creates Customer + Ephemeral Key +
-  /// PaymentIntent and returns everything PaymentSheet needs.
-  Future<Map<String, dynamic>> createStripeTopupSheet({
+  /// Step 1 of the Flutterwave top-up. Backend creates a hosted-checkout
+  /// link and returns `{ paymentLink, txRef, amount, currency }`.
+  Future<Map<String, dynamic>> createFlutterwaveTopupLink({
     required double amount,
     String? currency,
   }) async {
@@ -111,26 +113,57 @@ class WalletRepository {
     }
   }
 
-  /// Step 3 of Stripe top-up. After PaymentSheet succeeds, ask the backend
-  /// to verify with Stripe and credit the wallet. Idempotent.
-  Future<void> confirmStripeTopup({required String paymentIntentId}) async {
+  /// Step 3 of the Flutterwave top-up. Called after the user returns from
+  /// the hosted checkout; backend verifies with Flutterwave and credits the
+  /// wallet. Idempotent.
+  Future<void> confirmFlutterwaveTopup({
+    String? txRef,
+    String? transactionId,
+  }) async {
     try {
       await _apiClient.dio.post('/payment/me/topup/confirm', data: {
-        'paymentIntentId': paymentIntentId,
+        if (txRef != null && txRef.isNotEmpty) 'txRef': txRef,
+        if (transactionId != null && transactionId.isNotEmpty)
+          'transactionId': transactionId,
       });
     } on DioException catch (e) {
       throw Exception(_extractDioMessage(e));
     }
   }
 
-  // ── Stripe Connect (withdrawals) ───────────────────────────────────────
+  // ── Flutterwave payouts (withdrawals) ──────────────────────────────────
 
-  /// Returns `{ url, expiresAt, accountId }` — open `url` in an external
-  /// browser to let the user complete Stripe-hosted onboarding.
-  Future<Map<String, dynamic>> getStripeOnboardingLink() async {
+  /// Returns the bank list for the given ISO-2 country (`NG` by default).
+  /// Used to populate the bank-select dropdown during payout setup.
+  Future<List<Map<String, dynamic>>> fetchBanks({String country = 'NG'}) async {
+    try {
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/payouts/banks',
+        queryParameters: {'country': country},
+      );
+      final raw = response.data?['data'];
+      if (raw is List) {
+        return raw.whereType<Map<String, dynamic>>().toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
+  /// Resolves an account number against a bank code to confirm the
+  /// account holder name before the user commits to saving it.
+  Future<Map<String, dynamic>> resolveBankAccount({
+    required String accountNumber,
+    required String bankCode,
+  }) async {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
-        '/connect/onboarding',
+        '/payouts/resolve',
+        data: {
+          'accountNumber': accountNumber,
+          'bankCode': bankCode,
+        },
       );
       return response.data?['data'] as Map<String, dynamic>? ?? {};
     } on DioException catch (e) {
@@ -138,11 +171,35 @@ class WalletRepository {
     }
   }
 
-  /// Returns `{ connected, payoutsEnabled, detailsSubmitted, requirements? }`.
-  Future<Map<String, dynamic>> getStripeConnectStatus() async {
+  /// Persists the resolved bank account on the user record so future
+  /// withdrawals don't require re-entering the details.
+  Future<Map<String, dynamic>> saveBankAccount({
+    required String accountNumber,
+    required String bankCode,
+    String? bankName,
+    String? currency,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/payouts/bank',
+        data: {
+          'accountNumber': accountNumber,
+          'bankCode': bankCode,
+          if (bankName != null) 'bankName': bankName,
+          if (currency != null) 'currency': currency,
+        },
+      );
+      return response.data?['data'] as Map<String, dynamic>? ?? {};
+    } on DioException catch (e) {
+      throw Exception(_extractDioMessage(e));
+    }
+  }
+
+  /// `{ connected, payoutsEnabled, detailsSubmitted, bankAccount? }`.
+  Future<Map<String, dynamic>> getPayoutStatus() async {
     try {
       final response = await _apiClient.dio.get<Map<String, dynamic>>(
-        '/connect/status',
+        '/payouts/status',
       );
       return response.data?['data'] as Map<String, dynamic>? ?? {};
     } on DioException catch (e) {

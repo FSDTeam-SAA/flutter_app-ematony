@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/models/group_model.dart';
+import '../../core/utils/currency_utils.dart';
 import '../groups/groups_repository.dart';
 
 class WheelRotationItem {
@@ -161,11 +162,9 @@ class WheelController extends ChangeNotifier {
       final window = data['spinWindow'];
       spinWindow = window is Map<String, dynamic> ? window : const {};
 
-      // Refresh group's contributionAmount/maxMembers from response if richer
       final groupRaw = data['group'];
       if (groupRaw is Map<String, dynamic> && selectedGroup != null) {
-        final updated = GroupModel.fromJson(groupRaw)
-          ..membersCount = totalMembers;
+        final updated = GroupModel.fromJson(groupRaw)..membersCount = totalMembers;
         selectedGroup = updated;
       } else if (selectedGroup != null) {
         selectedGroup!.membersCount = totalMembers;
@@ -228,11 +227,9 @@ class WheelController extends ChangeNotifier {
   }
 
   String formattedSavingsPool() {
-    final symbol = (selectedGroup?.currencyCode ?? 'NGN') == 'USD' ? r'$' : '₦';
-    final formatted = currentSavingsPool.toStringAsFixed(2).replaceAllMapped(
-          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '$symbol$formatted';
+    return formatCurrencyAmount(
+      currentSavingsPool,
+      selectedGroup?.currencyCode ?? 'NGN',
+    );
   }
 }

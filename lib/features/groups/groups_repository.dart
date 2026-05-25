@@ -111,6 +111,7 @@ class GroupsRepository {
     required double amount,
     required String frequency,
     required int maxMembers,
+    required String currencyCode,
     required bool autoPayments,
   }) async {
     try {
@@ -121,6 +122,9 @@ class GroupsRepository {
         'contributionFrequency': frequency,
         'frequency': frequency,
         'maxMembers': maxMembers,
+        'currencyCode': currencyCode,
+        'autoPaymentsEnabled': autoPayments,
+        'autoPayments': autoPayments,
       });
       final data = response.data?['data'] as Map<String, dynamic>? ?? {};
       final group = data['group'] as Map<String, dynamic>?;

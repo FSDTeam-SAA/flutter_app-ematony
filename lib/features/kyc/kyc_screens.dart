@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/labeled_text_field.dart';
@@ -77,7 +75,7 @@ class IdentityVerificationScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'We need to verify your identity before you can fully participate in savings rotations, payouts, and wallet activity. Verification is powered by Stripe Identity.',
+            'We need to verify your identity before you can fully participate in savings rotations, payouts, and wallet activity. Verification is powered by Flutterwave.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.mutedText,
                   height: 1.6,
@@ -346,37 +344,62 @@ class KycUploadIdScreen extends StatefulWidget {
 }
 
 class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
-  bool _isCreating = false;
-  bool _isChecking = false;
-  String? _sessionUrl;
-  String? _sessionId;
+  String _idType = 'bvn';
+  final _idCtrl = TextEditingController();
+  bool _isVerifying = false;
   String? _statusText;
+  bool _statusIsError = false;
 
-  Future<void> _startStripeVerification() async {
-    setState(() => _isCreating = true);
+  @override
+  void dispose() {
+    _idCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final id = _idCtrl.text.trim();
+    if (id.length != 11 || int.tryParse(id) == null) {
+      setState(() {
+        _statusIsError = true;
+        _statusText = 'Enter the 11-digit number exactly as registered.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isVerifying = true;
+      _statusText = null;
+    });
+
     try {
-      final response = await context.read<ApiClient>().dio.post<Map<String, dynamic>>(
-            '/kyc/stripe/verification-session',
+      final response = await context
+          .read<ApiClient>()
+          .dio
+          .post<Map<String, dynamic>>(
+            '/kyc/flutterwave/verify',
+            data: {'type': _idType, 'id': id},
           );
       final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      final url = (data['url'] ?? data['stripeVerificationUrl'] ?? '').toString();
-      final sessionId = (data['stripeVerificationId'] ?? '').toString();
+      final matches = data['matches'] == true;
+      final kyc = data['kycApplication'] as Map<String, dynamic>? ?? {};
+      final kycStatus = (kyc['status'] ?? '').toString();
 
-      setState(() {
-        _sessionUrl = url.isEmpty ? null : url;
-        _sessionId = sessionId.isEmpty ? null : sessionId;
-        _statusText = 'Stripe session created. Complete the verification and return to the app.';
-      });
+      if (!mounted) return;
 
-      if (_sessionUrl != null) {
-        final launched = await launchUrl(
-          Uri.parse(_sessionUrl!),
-          mode: LaunchMode.externalApplication,
-        );
-        if (!launched && mounted) {
-          _showKycMessage(context, 'Unable to open Stripe verification URL automatically.', error: true);
-        }
+      if (matches || kycStatus == 'approved') {
+        await context.read<AuthController>().markKycVerified();
+        if (!mounted) return;
+        context.go('/kyc/verified');
+        return;
       }
+
+      final reason = (kyc['rejectionReason'] ?? '').toString();
+      setState(() {
+        _statusIsError = true;
+        _statusText = reason.isNotEmpty
+            ? reason
+            : 'We could not match this ${_idType.toUpperCase()} to your application.';
+      });
     } catch (error) {
       if (!mounted) return;
       final message = _extractDioMessage(error);
@@ -386,66 +409,21 @@ class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
           message.toLowerCase().contains('user not found');
 
       if (isUserMissing) {
-        _showKycMessage(context, 'Session expired. Please sign in again.', error: true);
+        _showKycMessage(context, 'Session expired. Please sign in again.',
+            error: true);
         await context.read<AuthController>().logout();
         if (!mounted) return;
         context.go('/login');
         return;
       }
 
-      final clean = message.endsWith('.') ? message.substring(0, message.length - 1) : message;
-      _showKycMessage(
-        context,
-        '$clean. Tap "Use Demo Verification Flow" to continue offline.',
-        error: true,
-      );
+      setState(() {
+        _statusIsError = true;
+        _statusText = message;
+      });
     } finally {
       if (mounted) {
-        setState(() => _isCreating = false);
-      }
-    }
-  }
-
-  Future<void> _checkStripeStatus() async {
-    if (_sessionId == null || _sessionId!.isEmpty) return;
-
-    setState(() => _isChecking = true);
-    try {
-      final response = await context.read<ApiClient>().dio.get<Map<String, dynamic>>(
-            '/kyc/stripe/verification-session/$_sessionId',
-          );
-      final data = response.data?['data'] as Map<String, dynamic>? ?? {};
-      final kyc = data['kycApplication'] as Map<String, dynamic>? ?? {};
-      final stripeSession = data['stripeSession'] as Map<String, dynamic>? ?? {};
-      final status = (kyc['status'] ?? '').toString();
-      final stripeStatus = (stripeSession['status'] ?? '').toString();
-
-      if (!mounted) return;
-
-      if (status == 'approved' || stripeStatus == 'verified') {
-        await context.read<AuthController>().markKycVerified();
-        if (!mounted) return;
-        context.go('/kyc/verified');
-        return;
-      }
-
-      if (status == 'resubmission_required') {
-        _showKycMessage(
-          context,
-          (stripeSession['lastError']?['reason'] ?? stripeSession['lastError'] ?? 'Stripe needs more information.')
-              .toString(),
-          error: true,
-        );
-        return;
-      }
-
-      context.push('/kyc/under-review');
-    } catch (error) {
-      if (!mounted) return;
-      _showKycMessage(context, _extractDioMessage(error), error: true);
-    } finally {
-      if (mounted) {
-        setState(() => _isChecking = false);
+        setState(() => _isVerifying = false);
       }
     }
   }
@@ -453,32 +431,54 @@ class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
   @override
   Widget build(BuildContext context) {
     return _KycFormScaffold(
-      title: 'Stripe Identity',
+      title: 'Identity Verification',
       children: [
         Text(
-          'Identity verification will continue securely with Stripe Identity. Stripe will capture your document and matching selfie directly.',
+          'Verify your identity instantly using your Bank Verification Number (BVN) or National Identification Number (NIN). Flutterwave checks the number against the national registry and matches the name on your application.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.mutedText,
                 height: 1.6,
               ),
         ),
         const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('BVN'),
+                selected: _idType == 'bvn',
+                onSelected: (_) => setState(() => _idType = 'bvn'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('NIN'),
+                selected: _idType == 'nin',
+                onSelected: (_) => setState(() => _idType = 'nin'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _idCtrl,
+          keyboardType: TextInputType.number,
+          maxLength: 11,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            labelText: _idType == 'bvn'
+                ? 'BVN (11 digits)'
+                : 'NIN (11 digits)',
+            counterText: '',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 14),
         const _UploadOptionCard(
           icon: Icons.shield_outlined,
-          title: 'Powered by Stripe',
-          subtitle: 'Secure hosted identity verification',
-        ),
-        const SizedBox(height: 14),
-        const _UploadOptionCard(
-          icon: Icons.credit_card_outlined,
-          title: 'Document Capture',
-          subtitle: 'Upload the selected document inside Stripe',
-        ),
-        const SizedBox(height: 14),
-        const _UploadOptionCard(
-          icon: Icons.face_retouching_natural_outlined,
-          title: 'Selfie Match',
-          subtitle: 'Stripe will ask for a matching selfie',
+          title: 'Powered by Flutterwave',
+          subtitle: 'Secure identity verification against the national registry',
         ),
         if (_statusText != null) ...[
           const SizedBox(height: 18),
@@ -486,13 +486,17 @@ class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.subtle,
+              color: _statusIsError
+                  ? AppColors.dangerLight
+                  : AppColors.subtle,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
               _statusText!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.primaryDark,
+                    color: _statusIsError
+                        ? AppColors.danger
+                        : AppColors.primaryDark,
                     height: 1.5,
                   ),
             ),
@@ -500,29 +504,10 @@ class _KycUploadIdScreenState extends State<KycUploadIdScreen> {
         ],
         const SizedBox(height: 28),
         PrimaryButton(
-          label: 'Continue with Stripe Identity',
-          loading: _isCreating,
-          onPressed: _startStripeVerification,
+          label: 'Verify Identity',
+          loading: _isVerifying,
+          onPressed: _submit,
         ),
-        if (_sessionUrl != null) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => launchUrl(
-                Uri.parse(_sessionUrl!),
-                mode: LaunchMode.externalApplication,
-              ),
-              child: const Text('Open Stripe Verification'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          PrimaryButton(
-            label: 'Check Verification Status',
-            loading: _isChecking,
-            onPressed: _checkStripeStatus,
-          ),
-        ],
         const SizedBox(height: 16),
         Center(
           child: TextButton(
@@ -832,7 +817,7 @@ class KycFaceCompleteScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'This was a demo verification only. To complete real identity verification, return and continue with Stripe Identity.',
+            'This was a demo verification only. To complete real identity verification, return and submit your BVN or NIN.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.mutedText,
                   height: 1.6,
@@ -841,7 +826,7 @@ class KycFaceCompleteScreen extends StatelessWidget {
           ),
           const Spacer(),
           PrimaryButton(
-            label: 'Back to Stripe Identity',
+            label: 'Back to Identity Verification',
             onPressed: () => context.go('/kyc/upload-id'),
           ),
         ],
@@ -898,7 +883,7 @@ class KycReviewScreen extends StatelessWidget {
           ),
           const Spacer(),
           PrimaryButton(
-            label: 'Back to Stripe Identity',
+            label: 'Back to Identity Verification',
             color: AppColors.warning,
             onPressed: () => context.go('/kyc/upload-id'),
           ),

@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/config/stripe_config.dart';
 import '../../core/models/payment_model.dart';
 import 'wallet_repository.dart';
 
@@ -17,21 +16,17 @@ class WalletController extends ChangeNotifier {
   List<PaymentModel> transactions = [];
   String? error;
 
-  // Cached Stripe Connect onboarding status. Refreshed on demand.
-  bool connectConnected = false;
-  bool connectPayoutsEnabled = false;
+  // Cached Flutterwave payout / bank-account status. Refreshed on demand.
+  bool payoutConnected = false;
+  bool payoutsEnabled = false;
+  Map<String, dynamic>? bankAccount;
 
-  double get balance {
-    double b = 0;
-    for (final t in transactions) {
-      if (t.isTopUp) {
-        b += t.price;
-      } else if (t.isWithdraw) {
-        b -= t.price;
-      }
-    }
-    return b < 0 ? 0 : b;
-  }
+  // Server-computed wallet figures from `/payment/me/wallet`.
+  double availableBalance = 0;
+  double totalEarned = 0;
+  double totalWithdrawn = 0;
+
+  double get balance => availableBalance;
 
   Future<void> load() async {
     if (isLoading) return;
@@ -40,7 +35,25 @@ class WalletController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      transactions = await _repository.fetchMyPayments();
+      final results = await Future.wait([
+        _repository.fetchWalletBalance(),
+        _repository.fetchMyPayments(),
+        _repository.fetchMyWithdrawals(),
+      ]);
+
+      final wallet = results[0] as Map<String, dynamic>;
+      final payments = results[1] as List<PaymentModel>;
+      final withdrawals = (results[2] as List<Map<String, dynamic>>)
+          .map(PaymentModel.fromWithdrawalJson)
+          .toList();
+
+      availableBalance =
+          (wallet['available'] as num?)?.toDouble() ?? 0;
+      totalEarned = (wallet['totalEarned'] as num?)?.toDouble() ?? 0;
+      totalWithdrawn = (wallet['totalWithdrawn'] as num?)?.toDouble() ?? 0;
+
+      transactions = [...payments, ...withdrawals]
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (e) {
       error = e.toString();
     } finally {
@@ -49,114 +62,113 @@ class WalletController extends ChangeNotifier {
     }
   }
 
-  /// End-to-end Stripe top-up:
-  /// 1. Backend creates PaymentIntent + Customer + Ephemeral Key.
-  /// 2. Stripe PaymentSheet collects card details and confirms the payment.
-  /// 3. Backend verifies the PaymentIntent with Stripe and credits the wallet.
-  /// 4. We refresh the local transactions so the new balance shows.
+  /// End-to-end Flutterwave top-up:
+  /// 1. Backend creates a hosted-checkout link via /v3/payments.
+  /// 2. We open the link in an external browser; user pays.
+  /// 3. Flutterwave redirects to our backend's /payments/return page, which
+  ///    deep-links back into the app (handled by the router).
+  /// 4. Caller invokes [confirmTopUp] with the returned tx_ref so the
+  ///    backend can verify and credit the wallet.
   ///
-  /// Returns true on success. Throws (with a friendly message) on failure.
-  /// Cancellation by the user is treated as a no-op (returns false).
-  Future<bool> topUp({
+  /// Returns the txRef on a successful launch, or null if the user
+  /// cancelled before checkout opened.
+  Future<String?> startTopUp({
     required double amount,
-    String currency = 'usd',
-    String merchantDisplayName = 'Ajo Family',
+    String currency = 'NGN',
   }) async {
-    if (isTopUpInProgress) return false;
+    if (isTopUpInProgress) return null;
     if (amount <= 0) throw Exception('Amount must be greater than zero');
 
-    // Set the flag but DON'T notifyListeners here — no widget consumes this
-    // flag, and notifying mid-tap-handler while the bottom-sheet route is
-    // being unmounted causes a `_dependents.isEmpty` framework assertion.
     isTopUpInProgress = true;
     try {
-      // 1) Ask backend for PaymentSheet config.
-      final sheet = await _repository.createStripeTopupSheet(
+      final sheet = await _repository.createFlutterwaveTopupLink(
         amount: amount,
         currency: currency,
       );
 
-      final clientSecret = sheet['paymentIntent']?.toString();
-      final ephemeralKey = sheet['ephemeralKey']?.toString();
-      final customer = sheet['customer']?.toString();
-      final paymentIntentId = sheet['paymentIntentId']?.toString();
+      final paymentLink = sheet['paymentLink']?.toString() ?? '';
+      final txRef = sheet['txRef']?.toString() ?? '';
 
-      if (clientSecret == null || clientSecret.isEmpty) {
-        throw Exception('Backend did not return a paymentIntent client secret');
+      if (paymentLink.isEmpty) {
+        throw Exception('Backend did not return a payment link');
       }
 
-      // Stripe is already initialized in main.dart with StripeConfig.publishableKey,
-      // so we don't touch Stripe.publishableKey or applySettings() here — doing so
-      // again mid-flow races with the wallet screen's pending rebuilds and triggers
-      // `_dependents.isEmpty` framework assertions on Android.
-      if (StripeConfig.publishableKey.isEmpty) {
-        throw Exception('No Stripe publishable key configured');
-      }
-
-      // 2) Initialize and present the PaymentSheet.
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          customerEphemeralKeySecret: ephemeralKey,
-          customerId: customer,
-          merchantDisplayName: merchantDisplayName,
-          style: ThemeMode.light,
-        ),
+      final ok = await launchUrl(
+        Uri.parse(paymentLink),
+        mode: LaunchMode.externalApplication,
       );
-      await Stripe.instance.presentPaymentSheet();
-
-      // 4) PaymentSheet returned without throwing → payment succeeded.
-      //    Ask the backend to verify and credit the wallet.
-      if (paymentIntentId != null && paymentIntentId.isNotEmpty) {
-        await _repository.confirmStripeTopup(paymentIntentId: paymentIntentId);
+      if (!ok) {
+        throw Exception('Could not open the payment page');
       }
 
-      // 5) Schedule the refresh on the next event-loop turn so notifyListeners
-      //    here doesn't fire while PaymentSheet's native route is still being
-      //    deactivated (causes a `_dependents.isEmpty` framework assertion).
-      Future.microtask(load);
-      return true;
-    } on StripeException catch (e) {
-      // User cancelled → not an error to surface.
-      if (e.error.code == FailureCode.Canceled) {
-        return false;
-      }
-      throw Exception(e.error.localizedMessage ?? e.error.message ?? 'Payment failed');
+      return txRef.isEmpty ? null : txRef;
     } finally {
-      // Reset the flag but don't notify — `load()` (scheduled above on
-      // success) will notify when the new transactions arrive. On failure
-      // the caller already surfaces a SnackBar so no notify is needed.
       isTopUpInProgress = false;
     }
   }
 
-  /// Refreshes the Stripe Connect onboarding status from the backend.
-  /// Updates `connectConnected` / `connectPayoutsEnabled` for the UI.
-  Future<Map<String, dynamic>> refreshConnectStatus() async {
-    final status = await _repository.getStripeConnectStatus();
-    connectConnected = status['connected'] == true;
-    connectPayoutsEnabled = status['payoutsEnabled'] == true;
+  /// Confirms a Flutterwave top-up server-side and reloads transactions.
+  /// Call this with the txRef returned by [startTopUp] once the user is
+  /// back from the hosted checkout (typically on app resume or via deep
+  /// link).
+  Future<void> confirmTopUp({String? txRef, String? transactionId}) async {
+    await _repository.confirmFlutterwaveTopup(
+      txRef: txRef,
+      transactionId: transactionId,
+    );
+    await load();
+  }
+
+  /// Refreshes the Flutterwave payout / bank-account status from the
+  /// backend. Returns the raw payload so callers can branch on
+  /// `payoutsEnabled`.
+  Future<Map<String, dynamic>> refreshPayoutStatus() async {
+    final status = await _repository.getPayoutStatus();
+    payoutConnected = status['connected'] == true;
+    payoutsEnabled = status['payoutsEnabled'] == true;
+    bankAccount = status['bankAccount'] as Map<String, dynamic>?;
     notifyListeners();
     return status;
   }
 
-  /// Returns the Stripe-hosted onboarding URL for the current user.
-  /// Caller is responsible for opening it (e.g. via url_launcher).
-  Future<String> getOnboardingUrl() async {
-    final link = await _repository.getStripeOnboardingLink();
-    final url = link['url']?.toString() ?? '';
-    if (url.isEmpty) {
-      throw Exception('Stripe did not return an onboarding URL');
-    }
-    return url;
+  Future<List<Map<String, dynamic>>> fetchBanks({String country = 'NG'}) {
+    return _repository.fetchBanks(country: country);
   }
 
-  /// Submits a withdrawal. Backend creates a Stripe Transfer to the user's
-  /// connected Express account; on success the Withdrawal row is marked
+  Future<Map<String, dynamic>> resolveBankAccount({
+    required String accountNumber,
+    required String bankCode,
+  }) {
+    return _repository.resolveBankAccount(
+      accountNumber: accountNumber,
+      bankCode: bankCode,
+    );
+  }
+
+  Future<void> saveBankAccount({
+    required String accountNumber,
+    required String bankCode,
+    String? bankName,
+    String currency = 'NGN',
+  }) async {
+    final result = await _repository.saveBankAccount(
+      accountNumber: accountNumber,
+      bankCode: bankCode,
+      bankName: bankName,
+      currency: currency,
+    );
+    payoutConnected = true;
+    payoutsEnabled = result['payoutsEnabled'] == true;
+    bankAccount = result['bankAccount'] as Map<String, dynamic>?;
+    notifyListeners();
+  }
+
+  /// Submits a withdrawal. Backend creates a Flutterwave Transfer to the
+  /// user's saved bank account; on success the Withdrawal row is marked
   /// `paid`. Throws a friendly Exception on failure.
   Future<void> withdraw({
     required double amount,
-    String currency = 'usd',
+    String currency = 'NGN',
     String? note,
   }) async {
     if (isWithdrawInProgress) return;
@@ -168,6 +180,7 @@ class WalletController extends ChangeNotifier {
       await _repository.requestWithdrawal(
         amount: amount,
         note: note,
+        currency: currency,
       );
       await load();
     } finally {

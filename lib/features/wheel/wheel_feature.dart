@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/currency_utils.dart';
 import '../../core/widgets/ajo_chrome.dart';
 import 'wheel_controller.dart';
 
@@ -96,7 +97,7 @@ class _WheelScreenState extends State<WheelScreen> {
                     Text(
                       selected != null
                           ? controller.formattedSavingsPool()
-                          : '₦0.00',
+                          : formatCurrencyAmount(0, 'NGN'),
                       style:
                           Theme.of(context).textTheme.displaySmall?.copyWith(
                                 color: Colors.white,
@@ -220,9 +221,13 @@ class _WheelScreenState extends State<WheelScreen> {
         final winnerName = (result['winnerUser'] is Map)
             ? ((result['winnerUser'] as Map)['name']?.toString() ?? 'Winner')
             : 'Winner';
-        final amount = (result['amount'] as num?)?.toString() ?? '0';
+        final amount = ((result['amount'] as num?)?.toDouble() ?? 0);
+        final formattedAmount = formatCurrencyAmount(
+          amount,
+          controller.selectedGroup?.currencyCode ?? 'NGN',
+        );
         context.push(
-          '/wheel/winner?name=${Uri.encodeComponent(winnerName)}&amount=${Uri.encodeComponent('₦$amount')}',
+          '/wheel/winner?name=${Uri.encodeComponent(winnerName)}&amount=${Uri.encodeComponent(formattedAmount)}',
         );
       } else if (controller.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -726,3 +731,4 @@ class _WheelMemberRow extends StatelessWidget {
     );
   }
 }
+

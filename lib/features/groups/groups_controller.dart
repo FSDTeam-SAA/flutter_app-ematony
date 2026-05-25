@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+
 import '../../core/models/group_model.dart';
+import '../../core/utils/currency_utils.dart';
 import '../wheel/wheel_controller.dart';
 import 'groups_repository.dart';
 
@@ -27,7 +29,7 @@ class GroupsController extends ChangeNotifier {
 
   Future<void> load() async {
     if (isLoading) return;
-    
+
     isLoading = true;
     error = null;
     notifyListeners();
@@ -47,7 +49,10 @@ class GroupsController extends ChangeNotifier {
               final data = await _repository.getGroupWheel(g.id);
               return MapEntry(g.id, _previewFromWheel(data, g));
             } catch (_) {
-              return MapEntry(g.id, GroupPreview(rotations: const [], nextWheelDate: null));
+              return MapEntry(
+                g.id,
+                GroupPreview(rotations: const [], nextWheelDate: null),
+              );
             }
           }),
         );
@@ -69,8 +74,7 @@ class GroupsController extends ChangeNotifier {
             .map(WheelRotationItem.fromJson)
             .toList()
         : <WheelRotationItem>[];
-    final total =
-        (data['totalMembers'] as num?)?.toInt() ?? rotations.length;
+    final total = (data['totalMembers'] as num?)?.toInt() ?? rotations.length;
     if (total > 0) group.membersCount = total;
 
     DateTime? next;
@@ -87,7 +91,6 @@ class GroupsController extends ChangeNotifier {
   }
 
   Future<void> loadDetail(String id) async {
-    // Details are usually handled in the screen or a specialized sub-controller
     notifyListeners();
   }
 
@@ -96,25 +99,26 @@ class GroupsController extends ChangeNotifier {
     required String amount,
     required String frequency,
     required String maxMembers,
+    required String currencyCode,
     required String cycleDuration,
     required bool autoPayments,
   }) async {
     if (isCreating) return false;
-    
+
     isCreating = true;
     error = null;
     createdInviteCode = null;
     notifyListeners();
     try {
-      final parsedAmount = double.tryParse(
-              amount.replaceAll('₦', '').replaceAll(',', '').trim()) ??
-          1000;
+      final parsedAmount =
+          double.tryParse(stripSupportedCurrencySymbols(amount)) ?? 1000;
       final parsedMembers = int.tryParse(maxMembers.trim()) ?? 10;
       final code = await _repository.createGroup(
         name: name,
         amount: parsedAmount,
         frequency: frequency,
         maxMembers: parsedMembers,
+        currencyCode: currencyCode,
         autoPayments: autoPayments,
       );
       createdInviteCode = code;
@@ -131,7 +135,7 @@ class GroupsController extends ChangeNotifier {
 
   Future<String?> joinByCode(String code) async {
     if (isJoining) return null;
-    
+
     isJoining = true;
     error = null;
     notifyListeners();
