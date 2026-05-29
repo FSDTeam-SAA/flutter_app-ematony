@@ -30,8 +30,12 @@ class _WalletScreenState extends State<WalletScreen> {
     final ctrl = context.watch<WalletController>();
     final recentTx = ctrl.transactions.take(6).toList();
 
+    final hasBalance = ctrl.balance > 0;
+    final formattedAmount = ctrl.balance
+        .toStringAsFixed(2)
+        .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
     final balanceText = _balanceVisible
-        ? '₦${ctrl.balance.toStringAsFixed(2).replaceAllMapped(RegExp(r"(\d)(?=(\d{3})+(?!\d))"), (m) => "${m[1]},")}'
+        ? hasBalance ? '₦$formattedAmount' : formattedAmount
         : '₦••••••';
 
     return SafeArea(
